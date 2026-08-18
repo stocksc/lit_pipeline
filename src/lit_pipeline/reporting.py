@@ -62,6 +62,7 @@ class ReportPaper:
     title: str
     authors_display: str
     link: str
+    published_date: str
     triage_score: int
     summary: str
     relevance: list[str]
@@ -83,6 +84,7 @@ class TriagedPaperRow:
     published_date: str
     title_short: str
     score: int
+    link: str
 
 
 @dataclass
@@ -192,6 +194,7 @@ def collect_report_papers(
                 title=str(paper.get("title", "")),
                 authors_display=authors_display,
                 link=str(paper.get("link", "")),
+                published_date=str(paper.get("published_date", "")),
                 triage_score=_safe_int(paper.get("triage_score")),
                 summary=str(record.get("summary", "")),
                 relevance=relevance,
@@ -362,6 +365,7 @@ def collect_low_tier_table(
                 published_date=str(record.get("published_date", "")),
                 title_short=_short_title(str(record.get("title", ""))),
                 score=int(score_raw),
+                link=str(record.get("link", "")),
             )
         )
 
@@ -404,6 +408,7 @@ def render_report(
     lines = [report_title, f"{len(papers)} relevant paper{'s' if len(papers) != 1 else ''} found", ""]
     for p in papers:
         lines.append(f"[{p.triage_score}/10] {p.title}")
+        lines.append(f"  {p.published_date}")
         lines.append(f"  {p.authors_display}")
         lines.append(f"  {p.link}")
         lines.append(f"  Summary: {p.summary}")
@@ -417,6 +422,7 @@ def render_report(
         lines.append(f"--- Potentially Relevant ({len(mid_tier_papers)}) ---")
         for p in mid_tier_papers:
             lines.append(f"[{p.triage_score}/10] {p.title}")
+            lines.append(f"  {p.published_date}")
             lines.append(f"  {p.link}")
             lines.append(f"  {p.summary}")
             lines.append("")
@@ -424,6 +430,7 @@ def render_report(
     lines.append(f"--- Other Papers Reviewed ({triage_total}) ---")
     for row in triage_rows:
         lines.append(f"  [{row.score:>2}] {row.title_short}  {row.published_date}")
+        lines.append(f"    {row.link}")
     if triage_total > len(triage_rows):
         lines.append(f"  ... + {triage_total - len(triage_rows)} more not shown")
     lines.append("")

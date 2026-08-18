@@ -63,12 +63,11 @@ def main() -> int:
         costs.deep_read_cost_usd,
     )
 
-    report_title = (
-        f"{settings.weekly_report.subject_prefix}: "
-        f"{reporting.format_date_long(window_start)} - {reporting.format_date_long(window_end)}"
-    )
+    # report_title (no date -- shown in the email body) and subject (keeps
+    # the date -- shown in the mail client's subject line) deliberately
+    # diverge here.
     html, text = reporting.render_report(
-        report_title=report_title,
+        report_title=settings.weekly_report.subject_prefix,
         papers=papers,
         mid_tier_papers=mid_tier_papers,
         costs=costs,
@@ -77,7 +76,10 @@ def main() -> int:
         window_start=window_start,
         window_end=window_end,
     )
-    subject = report_title
+    subject = (
+        f"{settings.weekly_report.subject_prefix}: "
+        f"{reporting.format_date_long(window_start)} - {reporting.format_date_long(window_end)}"
+    )
     send_email(
         sender=settings.weekly_report.sender_email,
         recipient=settings.weekly_report.recipient_email,
