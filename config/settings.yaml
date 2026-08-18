@@ -1,0 +1,53 @@
+# Literature Tracker settings.
+# Edit this file to change what gets tracked — no code changes needed for anything below.
+
+# Free-text description of what's relevant to you. This is sent verbatim into
+# both the triage prompt (Haiku, scoring abstracts) and the deep-read prompt
+# (Opus, summarizing full papers), so write it like a briefing to a research
+# assistant: what you care about, what you don't, and any nuance that would
+# help someone judge a borderline paper.
+interests: |
+  I'm interested in mechanistic interpretability of large language models,
+  especially sparse autoencoders, feature circuits, and activation steering.
+  I also follow work on scaling laws, emergent capabilities, and evaluation
+  methodology for frontier models. I'm less interested in pure benchmark
+  leaderboard papers with no mechanistic or conceptual insight.
+
+arxiv:
+  # arXiv search-query syntax: field prefixes (au:, abs:, ti:, cat:) combined
+  # with AND/OR/ANDNOT. Reference: https://arxiv.org/help/api/user-manual#query_details
+  queries:
+    - "cat:cs.LG AND abs:interpretability"
+    - "cat:cs.CL AND abs:sparse autoencoder"
+  # Max results pulled per query, per day, before dedup.
+  max_results_per_query: 50
+  # Ignore anything first submitted more than this many days ago.
+  max_age_days: 7
+
+triage:
+  model: "claude-haiku-4-5"
+  # Papers scoring >= this (0-10 scale) move on to the deep-read stage.
+  score_threshold: 7
+
+deep_read:
+  model: "claude-opus-5"
+
+google_sheets:
+  # The long ID in your Google Sheet's URL:
+  # https://docs.google.com/spreadsheets/d/THIS_PART_HERE/edit
+  sheet_id: "REPLACE_ME_WITH_YOUR_SHEET_ID"
+  papers_tab: "papers"
+  deep_reads_tab: "deep_reads"
+
+weekly_report:
+  lookback_days: 7
+  recipient_email: "REDACTED"
+  # Must be an address on a domain verified with Resend, or Resend's shared
+  # test sender (onboarding@resend.dev) while you're getting set up.
+  sender_email: "onboarding@resend.dev"
+  subject_prefix: "Weekly Lit Digest"
+
+retries:
+  # How many times to retry a paper stuck in an error state before giving up
+  # on it permanently (it stays in the sheet for manual inspection).
+  max_retry_count: 3

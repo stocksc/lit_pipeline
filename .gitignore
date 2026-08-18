@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Secrets and local credentials -- never commit these
+.env
+*service-account*.json
+*credentials*.json
+
+# Jupyter
+.ipynb_checkpoints/
+
