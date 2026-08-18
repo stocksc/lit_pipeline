@@ -1,11 +1,11 @@
 """Shared report-building logic for both the weekly cron digest and manual
 backfill runs (see backfill.py).
 
-Both callers need the same three things -- a list of papers to show, a cost
-rollup, and a triage-score histogram -- but scoped differently:
+Both callers need the same things -- a list of papers to show, a cost
+rollup, and a per-paper triage table -- but scoped differently:
 
 - The weekly job scopes by *when the pipeline processed a paper* (`date_field
-  = "processed"`): triage cost/histogram keyed off `triaged_at`, the paper
+  = "processed"`): triage cost/table keyed off `triaged_at`, the paper
   list/deep-read cost keyed off `deep_read_at`. This is a trailing window
   from "today."
 - A backfill scopes by *when the paper was originally published on arXiv*
@@ -17,6 +17,12 @@ rollup, and a triage-score histogram -- but scoped differently:
 All date comparisons are date-only (no time-of-day), which is a deliberate
 simplification -- irrelevant at once-daily cadence, and backfill's CLI dates
 are calendar dates anyway.
+
+`compute_score_histogram` is kept for backfill.py's --dry-run console
+output (a 0-10 score distribution is a fast way to eyeball a large
+historical sweep before committing to deep-read cost); the email template
+itself uses `collect_triage_table` instead, a literal per-paper table
+capped at TRIAGE_TABLE_MAX_ROWS.
 """
 
 from __future__ import annotations
@@ -35,21 +41,27 @@ TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
 DateField = Literal["processed", "published"]
 
+TRIAGE_TABLE_MAX_ROWS = 25
+TITLE_SHORT_LENGTH = 20
+
 
 @dataclass
 class ReportPaper:
     arxiv_id: str
     title: str
-    authors: str
+    authors_display: str
     link: str
     triage_score: int
     summary: str
-    key_contributions: list[str]
-    methodology: str
+    relevance: list[str]
     limitations: list[str]
-    relevance_to_interests: str
-    novel_or_incremental: str
-    worth_followup: bool
+
+
+@dataclass
+class TriagedPaperRow:
+    published_date: str
+    title_short: str
+    score: int
 
 
 @dataclass
@@ -105,6 +117,12 @@ def _in_range(d: date | None, start: date, end: date) -> bool:
     return d is not None and start <= d <= end
 
 
+def _short_title(title: str) -> str:
+    if len(title) <= TITLE_SHORT_LENGTH:
+        return title
+    return title[:TITLE_SHORT_LENGTH] + "..."
+
+
 def collect_report_papers(
     papers_records: list[dict],
     deep_read_records: list[dict],
@@ -129,23 +147,22 @@ def collect_report_papers(
         if not _in_range(paper_date, start, end):
             continue
 
-        contributions = [s.strip() for s in str(record.get("key_contributions", "")).split("|") if s.strip()]
+        relevance = [s.strip() for s in str(record.get("relevance", "")).split("|") if s.strip()]
         limitations = [s.strip() for s in str(record.get("limitations", "")).split("|") if s.strip()]
+        affiliations = [s.strip() for s in str(record.get("author_affiliations", "")).split("|") if s.strip()]
+        authors = str(paper.get("authors", ""))
+        authors_display = f"{authors} ({', '.join(affiliations)})" if affiliations else authors
 
         report_papers.append(
             ReportPaper(
                 arxiv_id=arxiv_id,
                 title=str(paper.get("title", "")),
-                authors=str(paper.get("authors", "")),
+                authors_display=authors_display,
                 link=str(paper.get("link", "")),
                 triage_score=_safe_int(paper.get("triage_score")),
                 summary=str(record.get("summary", "")),
-                key_contributions=contributions,
-                methodology=str(record.get("methodology", "")),
+                relevance=relevance,
                 limitations=limitations,
-                relevance_to_interests=str(record.get("relevance_to_interests", "")),
-                novel_or_incremental=str(record.get("novel_or_incremental", "")),
-                worth_followup=str(record.get("worth_followup", "")).lower() == "true",
             )
         )
 
@@ -211,8 +228,9 @@ def compute_score_histogram(
     papers_records: list[dict], start: date, end: date, date_field: DateField
 ) -> dict[int, int]:
     """Counts triaged papers by score (0-10), zero-filled, over the window.
-    `date_field="published"` and `"processed"` both key off fields already
-    on the papers row (published_date / triaged_at) -- no join needed."""
+    Used by backfill.py's --dry-run console output. `date_field="published"`
+    and `"processed"` both key off fields already on the papers row
+    (published_date / triaged_at) -- no join needed."""
     histogram = {score: 0 for score in range(11)}
     for record in papers_records:
         if date_field == "processed":
@@ -230,11 +248,44 @@ def compute_score_histogram(
     return histogram
 
 
+def collect_triage_table(
+    papers_records: list[dict], start: date, end: date, date_field: DateField
+) -> tuple[list[TriagedPaperRow], int]:
+    """Every triaged paper in the window as (published_date, short title,
+    score) rows, sorted by score descending (ties by published_date
+    descending) so a capped table always shows the most relevant papers
+    first. Returns (rows capped at TRIAGE_TABLE_MAX_ROWS, total count before
+    capping) so the caller can show a "+N more" note."""
+    rows: list[TriagedPaperRow] = []
+    for record in papers_records:
+        if date_field == "processed":
+            paper_date = parse_date(str(record.get("triaged_at", "")))
+        else:
+            paper_date = parse_date(str(record.get("published_date", "")))
+        if not _in_range(paper_date, start, end):
+            continue
+        score_raw = str(record.get("triage_score", "")).strip()
+        if not score_raw.isdigit():
+            continue
+        rows.append(
+            TriagedPaperRow(
+                published_date=str(record.get("published_date", "")),
+                title_short=_short_title(str(record.get("title", ""))),
+                score=int(score_raw),
+            )
+        )
+
+    total_count = len(rows)
+    rows.sort(key=lambda r: (r.score, r.published_date), reverse=True)
+    return rows[:TRIAGE_TABLE_MAX_ROWS], total_count
+
+
 def render_report(
     report_title: str,
     papers: list[ReportPaper],
     costs: CostSummary,
-    histogram: dict[int, int],
+    triage_rows: list[TriagedPaperRow],
+    triage_total: int,
     window_start: date,
     window_end: date,
 ) -> tuple[str, str]:
@@ -247,14 +298,12 @@ def render_report(
         autoescape=True,
     )
     template = env.get_template("report.html.jinja")
-    histogram_rows = [(score, histogram[score]) for score in range(10, -1, -1)]
-    total_triaged = sum(histogram.values())
     html = template.render(
         report_title=report_title,
         papers=papers,
         costs=costs,
-        histogram_rows=histogram_rows,
-        total_triaged=total_triaged,
+        triage_rows=triage_rows,
+        triage_total=triage_total,
         window_start=window_start,
         window_end=window_end,
         count=len(papers),
@@ -263,19 +312,20 @@ def render_report(
     lines = [f"{report_title}: {window_start} to {window_end} ({len(papers)} paper(s))", ""]
     for p in papers:
         lines.append(f"[{p.triage_score}/10] {p.title}")
-        lines.append(f"  {p.authors}")
+        lines.append(f"  {p.authors_display}")
         lines.append(f"  {p.link}")
         lines.append(f"  Summary: {p.summary}")
-        if p.key_contributions:
-            lines.append("  Contributions: " + "; ".join(p.key_contributions))
+        if p.relevance:
+            lines.append("  Relevance: " + "; ".join(p.relevance))
         if p.limitations:
             lines.append("  Limitations: " + "; ".join(p.limitations))
-        lines.append(f"  Relevance: {p.relevance_to_interests}")
         lines.append("")
 
-    lines.append(f"--- Score breakdown ({total_triaged} triaged) ---")
-    for score, count in histogram_rows:
-        lines.append(f"  {score:>2}: {count}")
+    lines.append(f"--- Papers triaged this window ({triage_total}) ---")
+    for row in triage_rows:
+        lines.append(f"  [{row.score:>2}] {row.published_date}  {row.title_short}")
+    if triage_total > len(triage_rows):
+        lines.append(f"  ... + {triage_total - len(triage_rows)} more not shown")
     lines.append("")
 
     lines.append("--- Cost this window (estimated) ---")

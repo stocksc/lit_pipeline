@@ -8,7 +8,7 @@ extra LLM call, fully predictable output. Scoped by `date_field="processed"`
 actually finishes, and a trailing window naturally never re-includes a paper
 once it ages out, with no separate "already emailed" flag needed.
 
-The actual paper-list/cost/histogram logic lives in reporting.py, shared
+The actual paper-list/cost/triage-table logic lives in reporting.py, shared
 with backfill.py (which scopes by arXiv publish date over an explicit range
 instead of a trailing window from today).
 """
@@ -45,7 +45,7 @@ def main() -> int:
     costs = reporting.compute_cost_summary(
         papers_records, deep_read_records, window_start, window_end, date_field="processed"
     )
-    histogram = reporting.compute_score_histogram(
+    triage_rows, triage_total = reporting.collect_triage_table(
         papers_records, window_start, window_end, date_field="processed"
     )
     logger.info(
@@ -60,7 +60,8 @@ def main() -> int:
         report_title=settings.weekly_report.subject_prefix,
         papers=papers,
         costs=costs,
-        histogram=histogram,
+        triage_rows=triage_rows,
+        triage_total=triage_total,
         window_start=window_start,
         window_end=window_end,
     )

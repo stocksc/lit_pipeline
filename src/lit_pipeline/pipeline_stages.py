@@ -17,7 +17,7 @@ import logging
 from anthropic import Anthropic
 from gspread import Worksheet
 
-from lit_pipeline import sheets_store
+from lit_pipeline import pdf_extract, sheets_store
 from lit_pipeline.arxiv_client import PaperCandidate, download_pdf_bytes
 from lit_pipeline.config import Settings
 from lit_pipeline.llm_deep_read import deep_read_paper
@@ -135,8 +135,9 @@ def run_deep_read_stage(
         candidate = _candidate_from_row(row)
         try:
             pdf_bytes = download_pdf_bytes(candidate.pdf_url)
-            result, usage = deep_read_paper(client, settings.deep_read, settings.interests, candidate, pdf_bytes)
-        except Exception as exc:  # isolate any failure (download, API, parsing) to this one paper
+            pdf_text = pdf_extract.extract_pdf_text(pdf_bytes)
+            result, usage = deep_read_paper(client, settings.deep_read, settings.interests, candidate, pdf_text)
+        except Exception as exc:  # isolate any failure (download, extraction, API) to this one paper
             logger.warning("Deep read failed for %s: %s", row.arxiv_id, exc)
             next_retry = row.retry_count + 1
             status = (

@@ -1,22 +1,21 @@
-"""Strong-model deep read: structured summary + critique of a full paper.
+"""Strong-model deep read: a quick-hit structured summary of a full paper.
 
-The PDF is sent to Claude directly as a native `document` content block
-(base64-encoded), not pre-extracted text. arXiv PDFs are LaTeX-generated,
-multi-column, and full of figures/equations that text-extraction libraries
-routinely mangle; Claude's native PDF reading sees the document as it
-actually renders.
+Takes plain extracted text (see pdf_extract.py) rather than sending Claude
+the native PDF -- native PDF input gives visual understanding of figures/
+tables/layout, but costs far more in tokens for this use case, where
+visuals aren't the point and the output is meant to be a compact
+click-through teaser, not a full review.
 
 Uses streaming (`client.messages.stream(...).get_final_message()`) rather
-than a plain `create`/`parse` call: a full-paper read plus Claude Opus 5's
-default adaptive thinking can run long, and streaming avoids HTTP timeouts
-on that kind of request. `output_format=DeepReadResult` still gives us a
-validated `DeepReadResult` on `message.parsed_output`, same as the
-non-streaming `.parse()` path used for triage.
+than a plain `create`/`parse` call: Claude Opus 5's default adaptive
+thinking can still run for a while even on a short output, and streaming
+avoids HTTP timeouts on that kind of request. `output_format=DeepReadResult`
+still gives us a validated `DeepReadResult` on `message.parsed_output`, same
+as the non-streaming `.parse()` path used for triage.
 """
 
 from __future__ import annotations
 
-import base64
 import logging
 
 from anthropic import Anthropic
@@ -29,12 +28,26 @@ from lit_pipeline.schemas import DeepReadResult
 logger = logging.getLogger(__name__)
 
 DEEP_READ_SYSTEM_PROMPT = """You are a research assistant helping a researcher \
-keep up with their field. You are given a researcher's stated interests and \
-the full text of a paper as a PDF. Read the paper carefully and produce a \
-structured summary and critique: what it claims to contribute, how it does \
-so, its real weaknesses, and how it relates to the researcher's stated \
-interests. Be direct and specific -- avoid vague praise, call out concrete \
-limitations a careful reader would raise."""
+keep up with their field. You are given the researcher's stated interests and \
+the extracted text of a paper. The researcher will click through to the paper \
+itself for full detail, so produce a compact, quick-hit summary, not a full \
+review:
+
+1. A summary of the paper in about 100 words.
+2. Relevance: bullet points (about 50 words total) on why this paper is \
+relevant to the researcher's stated interests.
+3. Limitations: bullet points (about 50 words total) on what makes this paper \
+NOT directly useful for a practitioner -- e.g. no code/data released, \
+synthetic-only validation, proprietary data required, purely theoretical, \
+inapplicable to a regulated setting. This is about practical applicability, \
+not a generic academic critique.
+
+Also identify every unique institution/affiliation among the paper's authors \
+-- usually found near the author list on the first page, or in footnotes. \
+List each institution once, in order of first appearance. If none can be \
+determined from the text, return an empty list.
+
+Be direct and specific -- avoid vague praise or generic critique."""
 
 MAX_TOKENS = 64000
 
@@ -44,32 +57,18 @@ def deep_read_paper(
     settings: DeepReadSettings,
     interests: str,
     candidate: PaperCandidate,
-    pdf_bytes: bytes,
+    pdf_text: str,
 ) -> tuple[DeepReadResult, LLMUsage]:
-    pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("ascii")
+    user_content = (
+        f"Researcher's interests:\n{interests}\n\n"
+        f"Paper title: {candidate.title}\n\n"
+        f"Paper text:\n{pdf_text}"
+    )
     with client.messages.stream(
         model=settings.model,
         max_tokens=MAX_TOKENS,
         system=DEEP_READ_SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "document",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "application/pdf",
-                            "data": pdf_b64,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": f"Researcher's interests:\n{interests}\n\nPaper title: {candidate.title}",
-                    },
-                ],
-            }
-        ],
+        messages=[{"role": "user", "content": user_content}],
         output_format=DeepReadResult,
     ) as stream:
         message = stream.get_final_message()

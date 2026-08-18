@@ -31,45 +31,50 @@
               <div style="font-size:17px; font-weight:bold; line-height:1.35;">
                 <a href="{{ paper.link }}" style="color:#1a1a1a; text-decoration:none;">{{ paper.title }}</a>
               </div>
-              <div style="font-size:13px; color:#6b7280; margin-top:4px;">{{ paper.authors }}</div>
-              <div style="font-size:12px; color:#6b7280; margin-top:2px; text-transform:uppercase; letter-spacing:0.03em;">
-                {{ paper.novel_or_incremental }}{% if paper.worth_followup %} &middot; worth follow-up{% endif %}
-              </div>
+              <div style="font-size:13px; color:#6b7280; margin-top:4px;">{{ paper.authors_display }}</div>
 
               <p style="font-size:14.5px; line-height:1.55; margin:14px 0 0 0;">{{ paper.summary }}</p>
 
-              {% if paper.key_contributions %}
-              <div style="font-size:13px; font-weight:bold; margin-top:14px; color:#374151;">Key contributions</div>
+              {% if paper.relevance %}
+              <div style="font-size:13px; font-weight:bold; margin-top:14px; color:#374151;">Relevance</div>
               <ul style="font-size:14px; line-height:1.5; margin:6px 0 0 0; padding-left:20px;">
-                {% for item in paper.key_contributions %}<li>{{ item }}</li>{% endfor %}
+                {% for item in paper.relevance %}<li>{{ item }}</li>{% endfor %}
               </ul>
               {% endif %}
 
               {% if paper.limitations %}
-              <div style="font-size:13px; font-weight:bold; margin-top:14px; color:#374151;">Limitations / critique</div>
+              <div style="font-size:13px; font-weight:bold; margin-top:14px; color:#374151;">Limitations</div>
               <ul style="font-size:14px; line-height:1.5; margin:6px 0 0 0; padding-left:20px;">
                 {% for item in paper.limitations %}<li>{{ item }}</li>{% endfor %}
               </ul>
               {% endif %}
-
-              <div style="font-size:13px; font-weight:bold; margin-top:14px; color:#374151;">Relevance to your interests</div>
-              <p style="font-size:14px; line-height:1.5; margin:6px 0 0 0; color:#374151;">{{ paper.relevance_to_interests }}</p>
             </td>
           </tr>
           {% endfor %}
           <tr>
             <td style="padding:20px 32px; background-color:#f9fafb; border-bottom:1px solid #e5e7eb;">
               <div style="font-size:13px; font-weight:bold; color:#374151; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:10px;">
-                Score breakdown ({{ total_triaged }} triaged)
+                Papers triaged this window ({{ triage_total }})
               </div>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px; color:#4b5563;">
-                {% for score, score_count in histogram_rows %}
+                <tr style="font-weight:bold; color:#374151;">
+                  <td style="padding:2px 8px 4px 0;">Date</td>
+                  <td style="padding:2px 8px 4px 0;">Paper</td>
+                  <td style="padding:2px 0 4px 0; text-align:right;">Score</td>
+                </tr>
+                {% for row in triage_rows %}
                 <tr>
-                  <td style="padding:2px 0; width:70px;">Score {{ score }}</td>
-                  <td style="padding:2px 0; text-align:right; font-variant-numeric:tabular-nums;">{{ score_count }}</td>
+                  <td style="padding:2px 8px 2px 0; white-space:nowrap;">{{ row.published_date }}</td>
+                  <td style="padding:2px 8px 2px 0;">{{ row.title_short }}</td>
+                  <td style="padding:2px 0; text-align:right; font-variant-numeric:tabular-nums;">{{ row.score }}</td>
                 </tr>
                 {% endfor %}
               </table>
+              {% if triage_total > triage_rows|length %}
+              <div style="font-size:12px; color:#9ca3af; margin-top:8px; font-style:italic;">
+                + {{ triage_total - triage_rows|length }} more not shown
+              </div>
+              {% endif %}
             </td>
           </tr>
           <tr>

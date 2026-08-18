@@ -40,8 +40,7 @@ PAPERS_HEADERS = [
 ]
 
 DEEP_READS_HEADERS = [
-    "arxiv_id", "summary", "key_contributions", "methodology", "limitations",
-    "relevance_to_interests", "novel_or_incremental", "worth_followup",
+    "arxiv_id", "summary", "relevance", "limitations", "author_affiliations",
     "deep_read_input_tokens", "deep_read_output_tokens", "deep_read_cost_usd",
     "deep_read_at",
 ]
@@ -197,12 +196,9 @@ def append_deep_read(
     row = [
         arxiv_id,
         result.summary,
-        " | ".join(result.key_contributions),
-        result.methodology,
+        " | ".join(result.relevance),
         " | ".join(result.limitations),
-        result.relevance_to_interests,
-        result.novel_or_incremental,
-        str(result.worth_followup),
+        " | ".join(result.author_affiliations),
         usage.input_tokens,
         usage.output_tokens,
         round(usage.cost_usd, 6),

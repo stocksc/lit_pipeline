@@ -7,7 +7,7 @@ JSON parsing or prompt-engineered JSON formatting required.
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -28,20 +28,29 @@ class TriageResult(BaseModel):
 
 
 class DeepReadResult(BaseModel):
-    """Strong-model structured summary + critique of a full paper."""
+    """Strong-model quick-hit summary of a full paper. Deliberately compact --
+    these are click-through teasers, not full reviews."""
 
-    summary: str = Field(description="A concise 3-5 sentence summary of the paper.")
-    key_contributions: list[str] = Field(
-        description="The paper's main claimed contributions, as short bullet points."
+    summary: str = Field(description="A concise summary of the paper, in about 100 words.")
+    relevance: list[str] = Field(
+        description=(
+            "Bullet points (about 50 words total) on why this paper is relevant to the "
+            "researcher's stated interests."
+        )
     )
-    methodology: str = Field(description="A brief description of the approach/methods used.")
     limitations: list[str] = Field(
-        description="Weaknesses, gaps, or critique points, as short bullet points."
+        description=(
+            "Bullet points (about 50 words total) on what makes this paper NOT directly "
+            "useful for a practitioner -- e.g. no code/data released, synthetic-only "
+            "validation, proprietary data required, purely theoretical, inapplicable to a "
+            "regulated setting. Not a generic academic critique -- specifically practical "
+            "applicability gaps."
+        )
     )
-    relevance_to_interests: str = Field(
-        description="Why this paper matters (or doesn't) given the user's stated interests."
-    )
-    novel_or_incremental: Literal["novel", "incremental", "survey", "other"]
-    worth_followup: bool = Field(
-        description="Whether this paper warrants deeper personal follow-up beyond this summary."
+    author_affiliations: list[str] = Field(
+        description=(
+            "Each unique institution/affiliation among the paper's authors, listed once, "
+            "in order of first appearance (usually found near the author list on the first "
+            "page or in footnotes). Empty list if none can be determined from the text."
+        )
     )

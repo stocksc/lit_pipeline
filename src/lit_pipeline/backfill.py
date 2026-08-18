@@ -146,12 +146,16 @@ def main(argv: list[str] | None = None) -> int:
     costs = reporting.compute_cost_summary(
         papers_records, deep_read_records, args.start_date, args.end_date, date_field="published"
     )
+    triage_rows, triage_total = reporting.collect_triage_table(
+        papers_records, args.start_date, args.end_date, date_field="published"
+    )
 
     html, text = reporting.render_report(
         report_title=f"Backfill Digest ({args.start_date} to {args.end_date})",
         papers=report_papers,
         costs=costs,
-        histogram=histogram,
+        triage_rows=triage_rows,
+        triage_total=triage_total,
         window_start=args.start_date,
         window_end=args.end_date,
     )
