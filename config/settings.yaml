@@ -68,7 +68,8 @@ google_sheets:
 
 weekly_report:
   lookback_days: 7
-  recipient_email: "REDACTED"
+  # recipient_email is NOT set here -- it's read from the REPORT_RECIPIENT_EMAIL
+  # env var (see .env.example) so a personal address never ends up committed.
   # Must be an address on a domain verified with Resend, or Resend's shared
   # test sender (onboarding@resend.dev) while you're getting set up.
   sender_email: "onboarding@resend.dev"

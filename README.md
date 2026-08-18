@@ -54,8 +54,8 @@ GitHub Actions, which has no browser).
 3. For `weekly_report.sender_email` in `config/settings.yaml`: Resend's
    shared `onboarding@resend.dev` sender works out of the box while you're
    getting set up; sending from your own domain requires verifying it under
-   Domains in the Resend dashboard. Either way, sending to your own
-   `recipient_email` should work immediately.
+   Domains in the Resend dashboard. Either way, sending to your own address
+   (set as `REPORT_RECIPIENT_EMAIL`, see below) should work immediately.
 
 ### 4. Your interests + arXiv queries
 
@@ -71,10 +71,14 @@ Edit `config/settings.yaml`:
 
 ```bash
 cp .env.example .env
-# then fill in ANTHROPIC_API_KEY, RESEND_API_KEY, and either
-# GOOGLE_SERVICE_ACCOUNT_FILE (path to the downloaded json key) or
+# then fill in ANTHROPIC_API_KEY, RESEND_API_KEY, REPORT_RECIPIENT_EMAIL,
+# and either GOOGLE_SERVICE_ACCOUNT_FILE (path to the downloaded json key) or
 # GOOGLE_SERVICE_ACCOUNT_JSON (its contents, for parity with CI)
 ```
+
+`REPORT_RECIPIENT_EMAIL` (where the digest gets sent) lives here rather than
+in `config/settings.yaml` specifically because that file is committed to the
+repo -- keeping a personal email address out of version control.
 
 ### 6. Push to GitHub + add repo secrets
 
@@ -92,6 +96,7 @@ New repository secret**, add:
 | `ANTHROPIC_API_KEY` | from step 1 |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | the **entire contents** of the downloaded JSON key file |
 | `RESEND_API_KEY` | from step 3 |
+| `REPORT_RECIPIENT_EMAIL` | where the weekly digest gets sent |
 
 (`config/settings.yaml` -- including the sheet ID -- is committed to the
 repo as regular config, not a secret; access is still gated by who the

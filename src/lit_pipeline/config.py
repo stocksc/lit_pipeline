@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Union
 
@@ -42,6 +43,9 @@ class GoogleSheetsSettings(BaseModel):
 
 class WeeklyReportSettings(BaseModel):
     lookback_days: int = 7
+    # Not loaded from settings.yaml -- injected from the REPORT_RECIPIENT_EMAIL
+    # env var in load_settings() below, so a personal address never ends up
+    # committed to the repo.
     recipient_email: str
     sender_email: str
     subject_prefix: str = "Weekly Lit Digest"
@@ -65,4 +69,15 @@ def load_settings(path: Union[Path, str, None] = None) -> Settings:
     config_path = Path(path) if path else DEFAULT_CONFIG_PATH
     with open(config_path, "r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)
+
+    recipient_email = os.environ.get("REPORT_RECIPIENT_EMAIL")
+    if not recipient_email:
+        raise RuntimeError(
+            "REPORT_RECIPIENT_EMAIL is not set. Add it to your .env file locally, "
+            "or as a GitHub Actions secret for the weekly workflow -- it's read from "
+            "the environment rather than settings.yaml so it never ends up committed "
+            "to the repo."
+        )
+    raw.setdefault("weekly_report", {})["recipient_email"] = recipient_email
+
     return Settings.model_validate(raw)
