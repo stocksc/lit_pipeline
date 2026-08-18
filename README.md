@@ -10,8 +10,9 @@ This README covers the one-time setup and day-to-day usage.
 ## How it fits together
 
 ```
-GitHub Actions (daily cron)  ->  lit-daily   ->  arXiv search -> Haiku triage -> Opus deep-read -> Google Sheet
-GitHub Actions (weekly cron) ->  lit-weekly  ->  Google Sheet -> HTML report  -> Resend -> your inbox
+GitHub Actions (daily cron)  ->  lit-daily    ->  arXiv search -> Haiku triage -> Opus deep-read -> Google Sheet
+GitHub Actions (weekly cron) ->  lit-weekly   ->  Google Sheet -> HTML report  -> Resend -> your inbox
+you, manually             ->  lit-backfill    ->  same pipeline, scoped to a past date range you choose
 ```
 
 The Google Sheet is the *only* durable state. Both scripts are safe to
@@ -107,6 +108,37 @@ uv run lit-weekly     # step 8: build + send the weekly digest
 Or explore interactively in `notebooks/exploration.ipynb` (uses the same
 `src/lit_pipeline` code, good for testing one paper at a time before
 running the whole pipeline).
+
+## Backfilling a past date range
+
+`lit-backfill` runs the same ingest -> triage -> deep-read -> email pipeline
+as the daily/weekly cron jobs, but scoped to an explicit window matched
+against each paper's arXiv **publish** date, not whenever you happen to run
+it. Useful for retroactively sweeping a period you weren't tracking yet, or
+exploring a topic you don't track daily.
+
+```bash
+# Cheap preview first: ingest + triage only, no deep-read, no email.
+# Prints a score histogram (how many papers scored 0, 1, 2, ... 10) so you
+# can see what a full run would cost before committing to it.
+uv run lit-backfill --start-date 2024-01-01 --end-date 2024-01-31 --dry-run
+
+# Full run: also deep-reads everything >= threshold and emails a
+# "Backfill Digest" report for just that window.
+uv run lit-backfill --start-date 2024-01-01 --end-date 2024-01-31
+```
+
+Flags:
+- `--start-date` / `--end-date` (required, `YYYY-MM-DD`, both inclusive)
+- `--query "..."` -- override `arxiv.queries` from settings.yaml for this run only (repeatable); omit to use your standing daily queries
+- `--threshold N` -- override `triage.score_threshold` for this run only (e.g. `--threshold 8` for "just the 8-and-ups")
+- `--dry-run` -- stop after triage; no deep-read, no email
+
+**Start with `--dry-run` for anything beyond a narrow window** -- deep-reading
+is a real per-paper Opus cost, and a broad query over a wide date range can
+easily turn up hundreds of papers. It's safe to re-run the same command
+repeatedly (including switching from `--dry-run` to a full run afterward):
+already-processed papers are skipped, same as the daily job.
 
 ## Running in GitHub Actions
 

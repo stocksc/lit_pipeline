@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import arxiv
 import httpx
@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 PDF_DOWNLOAD_DELAY_SECONDS = 2.0
 PDF_DOWNLOAD_TIMEOUT_SECONDS = 60.0
 PDF_DOWNLOAD_MAX_RETRIES = 3
+
+# arXiv's practical earliest coverage -- used as the lower bound when a
+# backfill only specifies `published_before`.
+EARLIEST_ARXIV_DATE = date(2007, 1, 1)
 
 
 @dataclass
@@ -48,23 +52,70 @@ def _strip_version(entry_id: str) -> str:
     return base
 
 
-def fetch_candidates(settings: ArxivSettings) -> list[PaperCandidate]:
-    """Run every configured query and return distinct, recent candidates."""
+def _format_arxiv_datetime(d: date, end_of_day: bool) -> str:
+    """arXiv's submittedDate range format: YYYYMMDDHHMM, UTC."""
+    return d.strftime("%Y%m%d") + ("2359" if end_of_day else "0000")
+
+
+def fetch_candidates(
+    settings: ArxivSettings,
+    published_after: date | None = None,
+    published_before: date | None = None,
+) -> list[PaperCandidate]:
+    """Run every configured query and return distinct candidates.
+
+    With no date bounds (the daily job's call site), behaves exactly as
+    before: a trailing window of `max_age_days` from now, filtered
+    client-side.
+
+    With either bound given (backfill's call site), pushes an explicit
+    `submittedDate:[...]` range into each query so arXiv filters
+    server-side, with `max_results=None`. This is required, not just an
+    optimization: `arxiv.Search` sorts newest-first and caps results
+    server-side *before* any client-side filtering, so a small
+    `max_results` would never even surface months-old papers once more
+    than `max_results` newer papers exist for that query.
+    """
     client = arxiv.Client(page_size=100, delay_seconds=3.0, num_retries=3)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.max_age_days)
+
+    ranged = published_after is not None or published_before is not None
+    if ranged:
+        after = published_after or EARLIEST_ARXIV_DATE
+        before = published_before or datetime.now(timezone.utc).date()
+        date_clause = (
+            f"submittedDate:[{_format_arxiv_datetime(after, end_of_day=False)}"
+            f" TO {_format_arxiv_datetime(before, end_of_day=True)}]"
+        )
+        after_dt = datetime(after.year, after.month, after.day, tzinfo=timezone.utc)
+        before_dt: datetime | None = datetime(before.year, before.month, before.day, 23, 59, 59, tzinfo=timezone.utc)
+        max_results = None
+    else:
+        date_clause = None
+        after_dt = datetime.now(timezone.utc) - timedelta(days=settings.max_age_days)
+        before_dt = None
+        max_results = settings.max_results_per_query
 
     seen: dict[str, PaperCandidate] = {}
     for query in settings.queries:
+        # Parenthesize the configured query before ANDing in the date clause --
+        # a bare `q1 OR q2 AND submittedDate:[...]` would bind incorrectly,
+        # scoping the date range to only the last OR'd term.
+        full_query = f"({query}) AND {date_clause}" if date_clause else query
         search = arxiv.Search(
-            query=query,
-            max_results=settings.max_results_per_query,
+            query=full_query,
+            max_results=max_results,
             sort_by=arxiv.SortCriterion.SubmittedDate,
             sort_order=arxiv.SortOrder.Descending,
         )
         count_for_query = 0
         for result in client.results(search):
-            if result.published < cutoff:
+            if before_dt is not None and result.published > before_dt:
+                # A stray too-new result doesn't mean everything scanned
+                # after it is also out of range -- keep going.
                 continue
+            if result.published < after_dt:
+                # Descending sort: nothing further in this query can match either.
+                break
             arxiv_id = _strip_version(result.entry_id)
             if arxiv_id in seen or result.pdf_url is None:
                 continue
@@ -78,7 +129,7 @@ def fetch_candidates(settings: ArxivSettings) -> list[PaperCandidate]:
                 pdf_url=result.pdf_url,
             )
             count_for_query += 1
-        logger.info("Query %r matched %d new candidate(s)", query, count_for_query)
+        logger.info("Query %r matched %d new candidate(s)", full_query, count_for_query)
 
     logger.info("Fetched %d distinct candidates across %d queries", len(seen), len(settings.queries))
     return list(seen.values())

@@ -22,6 +22,7 @@ dependencies = [
 [project.scripts]
 lit-daily = "lit_pipeline.daily_pipeline:main"
 lit-weekly = "lit_pipeline.weekly_report:main"
+lit-backfill = "lit_pipeline.backfill:main"
 
 [dependency-groups]
 dev = [
