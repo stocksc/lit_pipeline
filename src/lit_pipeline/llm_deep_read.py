@@ -23,6 +23,7 @@ from anthropic import Anthropic
 
 from lit_pipeline.arxiv_client import PaperCandidate
 from lit_pipeline.config import DeepReadSettings
+from lit_pipeline.pricing import LLMUsage
 from lit_pipeline.schemas import DeepReadResult
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ def deep_read_paper(
     interests: str,
     candidate: PaperCandidate,
     pdf_bytes: bytes,
-) -> DeepReadResult:
+) -> tuple[DeepReadResult, LLMUsage]:
     pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("ascii")
     with client.messages.stream(
         model=settings.model,
@@ -76,4 +77,9 @@ def deep_read_paper(
     result = message.parsed_output
     if result is None:
         raise ValueError(f"Deep-read call for {candidate.arxiv_id} returned no parsed output")
-    return result
+    usage = LLMUsage(
+        model=settings.model,
+        input_tokens=message.usage.input_tokens,
+        output_tokens=message.usage.output_tokens,
+    )
+    return result, usage

@@ -58,6 +58,30 @@
           </tr>
           {% endfor %}
           <tr>
+            <td style="padding:20px 32px; background-color:#f9fafb;">
+              <div style="font-size:13px; font-weight:bold; color:#374151; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:10px;">
+                Cost this week (estimated)
+              </div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px; color:#4b5563;">
+                <tr>
+                  <td style="padding:3px 0;">Triage ({{ costs.triage_count }} paper{{ "s" if costs.triage_count != 1 else "" }})</td>
+                  <td style="padding:3px 0; text-align:right;">{{ "{:,}".format(costs.triage_input_tokens + costs.triage_output_tokens) }} tokens</td>
+                  <td style="padding:3px 0 3px 16px; text-align:right; font-variant-numeric:tabular-nums;">${{ "%.4f"|format(costs.triage_cost_usd) }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:3px 0;">Deep read ({{ costs.deep_read_count }} paper{{ "s" if costs.deep_read_count != 1 else "" }})</td>
+                  <td style="padding:3px 0; text-align:right;">{{ "{:,}".format(costs.deep_read_input_tokens + costs.deep_read_output_tokens) }} tokens</td>
+                  <td style="padding:3px 0 3px 16px; text-align:right; font-variant-numeric:tabular-nums;">${{ "%.4f"|format(costs.deep_read_cost_usd) }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 0 0 0; font-weight:bold; border-top:1px solid #e5e7eb;">Total</td>
+                  <td style="padding:6px 0 0 0; border-top:1px solid #e5e7eb;"></td>
+                  <td style="padding:6px 0 0 16px; text-align:right; font-weight:bold; border-top:1px solid #e5e7eb; font-variant-numeric:tabular-nums;">${{ "%.4f"|format(costs.total_cost_usd) }}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
             <td style="padding:18px 32px; font-size:11px; color:#9ca3af;">
               Generated automatically by your literature tracker.
             </td>

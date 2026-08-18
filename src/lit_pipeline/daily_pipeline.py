@@ -70,7 +70,7 @@ def run_triage_stage(
     for row in to_triage:
         candidate = _candidate_from_row(row)
         try:
-            result = triage_paper(client, settings.triage, settings.interests, candidate)
+            result, usage = triage_paper(client, settings.triage, settings.interests, candidate)
         except Exception as exc:  # isolate any failure to this one paper
             logger.warning("Triage failed for %s: %s", row.arxiv_id, exc)
             next_retry = row.retry_count + 1
@@ -94,6 +94,9 @@ def run_triage_stage(
                         "triage_score": result.score,
                         "triage_rationale": result.rationale,
                         "matched_interest": result.matched_interest or "",
+                        "triage_input_tokens": usage.input_tokens,
+                        "triage_output_tokens": usage.output_tokens,
+                        "triage_cost_usd": round(usage.cost_usd, 6),
                         "triaged_at": sheets_store.now_iso(),
                         "last_error": "",
                     },
@@ -133,7 +136,7 @@ def run_deep_read_stage(
         candidate = _candidate_from_row(row)
         try:
             pdf_bytes = download_pdf_bytes(candidate.pdf_url)
-            result = deep_read_paper(client, settings.deep_read, settings.interests, candidate, pdf_bytes)
+            result, usage = deep_read_paper(client, settings.deep_read, settings.interests, candidate, pdf_bytes)
         except Exception as exc:  # isolate any failure (download, API, parsing) to this one paper
             logger.warning("Deep read failed for %s: %s", row.arxiv_id, exc)
             next_retry = row.retry_count + 1
@@ -151,7 +154,7 @@ def run_deep_read_stage(
             )
             continue
 
-        sheets_store.append_deep_read(deep_reads_ws, row.arxiv_id, result)
+        sheets_store.append_deep_read(deep_reads_ws, row.arxiv_id, result, usage)
         sheets_store.flush_cell_updates(
             papers_ws,
             sheets_store.build_cell_updates(

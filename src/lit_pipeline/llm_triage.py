@@ -13,6 +13,7 @@ from anthropic import Anthropic
 
 from lit_pipeline.arxiv_client import PaperCandidate
 from lit_pipeline.config import TriageSettings
+from lit_pipeline.pricing import LLMUsage
 from lit_pipeline.schemas import TriageResult
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ def triage_paper(
     settings: TriageSettings,
     interests: str,
     candidate: PaperCandidate,
-) -> TriageResult:
+) -> tuple[TriageResult, LLMUsage]:
     user_content = (
         f"Researcher's interests:\n{interests}\n\n"
         f"Paper title: {candidate.title}\n\n"
@@ -48,4 +49,9 @@ def triage_paper(
         raise ValueError(f"Triage call for {candidate.arxiv_id} returned no parsed output")
     # Defensive clamp -- the schema declares 0-10 bounds, but don't trust it blindly.
     result.score = max(0, min(10, result.score))
-    return result
+    usage = LLMUsage(
+        model=settings.model,
+        input_tokens=response.usage.input_tokens,
+        output_tokens=response.usage.output_tokens,
+    )
+    return result, usage

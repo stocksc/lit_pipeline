@@ -25,6 +25,7 @@ from google.oauth2.service_account import Credentials
 
 from lit_pipeline.arxiv_client import PaperCandidate
 from lit_pipeline.config import GoogleSheetsSettings
+from lit_pipeline.pricing import LLMUsage
 from lit_pipeline.schemas import DeepReadResult
 
 logger = logging.getLogger(__name__)
@@ -34,12 +35,14 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 PAPERS_HEADERS = [
     "arxiv_id", "title", "authors", "published_date", "abstract", "link",
     "status", "triage_score", "triage_rationale", "matched_interest",
+    "triage_input_tokens", "triage_output_tokens", "triage_cost_usd",
     "ingested_at", "triaged_at", "last_error", "retry_count",
 ]
 
 DEEP_READS_HEADERS = [
     "arxiv_id", "summary", "key_contributions", "methodology", "limitations",
     "relevance_to_interests", "novel_or_incremental", "worth_followup",
+    "deep_read_input_tokens", "deep_read_output_tokens", "deep_read_cost_usd",
     "deep_read_at",
 ]
 
@@ -188,7 +191,9 @@ def flush_cell_updates(papers_ws: gspread.Worksheet, batched: list[dict]) -> Non
     batched.clear()
 
 
-def append_deep_read(deep_reads_ws: gspread.Worksheet, arxiv_id: str, result: DeepReadResult) -> None:
+def append_deep_read(
+    deep_reads_ws: gspread.Worksheet, arxiv_id: str, result: DeepReadResult, usage: LLMUsage
+) -> None:
     row = [
         arxiv_id,
         result.summary,
@@ -198,6 +203,9 @@ def append_deep_read(deep_reads_ws: gspread.Worksheet, arxiv_id: str, result: De
         result.relevance_to_interests,
         result.novel_or_incremental,
         str(result.worth_followup),
+        usage.input_tokens,
+        usage.output_tokens,
+        round(usage.cost_usd, 6),
         now_iso(),
     ]
     deep_reads_ws.append_row(row, value_input_option="RAW")
