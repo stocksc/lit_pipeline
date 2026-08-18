@@ -63,8 +63,12 @@ def main() -> int:
         costs.deep_read_cost_usd,
     )
 
+    report_title = (
+        f"{settings.weekly_report.subject_prefix}: "
+        f"{reporting.format_date_long(window_start)} - {reporting.format_date_long(window_end)}"
+    )
     html, text = reporting.render_report(
-        report_title=settings.weekly_report.subject_prefix,
+        report_title=report_title,
         papers=papers,
         mid_tier_papers=mid_tier_papers,
         costs=costs,
@@ -73,7 +77,7 @@ def main() -> int:
         window_start=window_start,
         window_end=window_end,
     )
-    subject = f"{settings.weekly_report.subject_prefix}: {len(papers)} paper(s)"
+    subject = report_title
     send_email(
         sender=settings.weekly_report.sender_email,
         recipient=settings.weekly_report.recipient_email,

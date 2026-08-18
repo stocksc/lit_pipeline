@@ -155,8 +155,12 @@ def main(argv: list[str] | None = None) -> int:
         papers_records, shown_ids, args.start_date, args.end_date, date_field="published"
     )
 
+    report_title = (
+        f"{settings.weekly_report.subject_prefix}: "
+        f"{reporting.format_date_long(args.start_date)} - {reporting.format_date_long(args.end_date)}"
+    )
     html, text = reporting.render_report(
-        report_title=f"Backfill Digest ({args.start_date} to {args.end_date})",
+        report_title=report_title,
         papers=report_papers,
         mid_tier_papers=mid_tier_papers,
         costs=costs,
@@ -165,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
         window_start=args.start_date,
         window_end=args.end_date,
     )
-    subject = f"Backfill Digest: {args.start_date} to {args.end_date} ({len(report_papers)} paper(s))"
+    subject = report_title
     send_email(
         sender=settings.weekly_report.sender_email,
         recipient=settings.weekly_report.recipient_email,

@@ -12,7 +12,7 @@
           <tr>
             <td style="padding:28px 32px; background-color:#1f2937; color:#ffffff;">
               <div style="font-size:20px; font-weight:bold;">{{ report_title }}</div>
-              <div style="font-size:13px; color:#c7ccd6; margin-top:4px;">{{ window_start }} &ndash; {{ window_end }} &middot; {{ count }} paper{{ "s" if count != 1 else "" }}</div>
+              <div style="font-size:13px; color:#c7ccd6; margin-top:4px;">{{ window_start }} &ndash; {{ window_end }} &middot; {{ count }} relevant paper{{ "s" if count != 1 else "" }} found</div>
             </td>
           </tr>
           {% if papers|length == 0 %}
@@ -26,7 +26,7 @@
           <tr>
             <td style="padding:24px 32px; border-bottom:1px solid #e5e7eb;">
               <div style="font-size:12px; font-weight:bold; color:#ffffff; background-color:{{ '#166534' if paper.triage_score >= 9 else '#1d4ed8' }}; display:inline-block; padding:2px 8px; border-radius:4px; margin-bottom:8px;">
-                SCORE {{ paper.triage_score }}/10
+                {{ paper.triage_score }}/10
               </div>
               <div style="font-size:17px; font-weight:bold; line-height:1.35;">
                 <a href="{{ paper.link }}" style="color:#1a1a1a; text-decoration:none;">{{ paper.title }}</a>
@@ -55,7 +55,7 @@
           <tr>
             <td style="padding:16px 32px 4px 32px; background-color:#f9fafb;">
               <div style="font-size:13px; font-weight:bold; color:#374151; text-transform:uppercase; letter-spacing:0.03em;">
-                Also relevant ({{ mid_tier_papers|length }})
+                Potentially Relevant ({{ mid_tier_papers|length }})
               </div>
             </td>
           </tr>
@@ -63,7 +63,7 @@
           <tr>
             <td style="padding:12px 32px; background-color:#f9fafb; border-bottom:1px solid #e5e7eb;">
               <div style="font-size:11px; font-weight:bold; color:#4b5563; background-color:#e5e7eb; display:inline-block; padding:1px 7px; border-radius:4px; margin-bottom:6px;">
-                SCORE {{ paper.triage_score }}/10
+                {{ paper.triage_score }}/10
               </div>
               <div style="font-size:15px; font-weight:bold; line-height:1.3;">
                 <a href="{{ paper.link }}" style="color:#1a1a1a; text-decoration:none;">{{ paper.title }}</a>
@@ -77,19 +77,19 @@
           <tr>
             <td style="padding:20px 32px; background-color:#f9fafb; border-bottom:1px solid #e5e7eb;">
               <div style="font-size:13px; font-weight:bold; color:#374151; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:10px;">
-                Other papers triaged this window ({{ triage_total }})
+                Other Papers Reviewed ({{ triage_total }})
               </div>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px; color:#4b5563;">
                 <tr style="font-weight:bold; color:#374151;">
-                  <td style="padding:2px 8px 4px 0;">Date</td>
+                  <td style="padding:2px 8px 4px 0; width:44px;">Score</td>
                   <td style="padding:2px 8px 4px 0;">Paper</td>
-                  <td style="padding:2px 0 4px 0; text-align:right;">Score</td>
+                  <td style="padding:2px 0 4px 0; white-space:nowrap;">Date</td>
                 </tr>
                 {% for row in triage_rows %}
                 <tr>
-                  <td style="padding:2px 8px 2px 0; white-space:nowrap;">{{ row.published_date }}</td>
+                  <td style="padding:2px 8px 2px 0; font-variant-numeric:tabular-nums;">{{ row.score }}</td>
                   <td style="padding:2px 8px 2px 0;">{{ row.title_short }}</td>
-                  <td style="padding:2px 0; text-align:right; font-variant-numeric:tabular-nums;">{{ row.score }}</td>
+                  <td style="padding:2px 0; white-space:nowrap;">{{ row.published_date }}</td>
                 </tr>
                 {% endfor %}
               </table>

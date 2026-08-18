@@ -72,7 +72,9 @@ weekly_report:
   # Must be an address on a domain verified with Resend, or Resend's shared
   # test sender (onboarding@resend.dev) while you're getting set up.
   sender_email: "onboarding@resend.dev"
-  subject_prefix: "Weekly Lit Digest"
+  # Used as "{subject_prefix}: {start date} - {end date}" for both the
+  # email subject and the in-body title, for lit-weekly and lit-backfill alike.
+  subject_prefix: "AI Fairness/Fair Lending Review"
 
 retries:
   # How many times to retry a paper stuck in an error state before giving up

@@ -53,7 +53,7 @@ TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 DateField = Literal["processed", "published"]
 
 TRIAGE_TABLE_MAX_ROWS = 25
-TITLE_SHORT_LENGTH = 20
+TITLE_SHORT_LENGTH = 70
 
 
 @dataclass
@@ -123,6 +123,13 @@ def parse_date(value: str) -> date | None:
         return datetime.fromisoformat(value).date()
     except ValueError:
         return None
+
+
+def format_date_long(d: date) -> str:
+    """'2026-07-01' -> 'July 1, 2026'. Built manually (not strftime's
+    %-d/%#d) since those leading-zero-strip flags aren't portable between
+    Windows and Unix."""
+    return f"{d.strftime('%B')} {d.day}, {d.year}"
 
 
 def _safe_int(value: object) -> int:
@@ -394,7 +401,7 @@ def render_report(
         count=len(papers),
     )
 
-    lines = [f"{report_title}: {window_start} to {window_end} ({len(papers)} paper(s))", ""]
+    lines = [report_title, f"{len(papers)} relevant paper{'s' if len(papers) != 1 else ''} found", ""]
     for p in papers:
         lines.append(f"[{p.triage_score}/10] {p.title}")
         lines.append(f"  {p.authors_display}")
@@ -407,16 +414,16 @@ def render_report(
         lines.append("")
 
     if mid_tier_papers:
-        lines.append(f"--- Also relevant ({len(mid_tier_papers)}) ---")
+        lines.append(f"--- Potentially Relevant ({len(mid_tier_papers)}) ---")
         for p in mid_tier_papers:
             lines.append(f"[{p.triage_score}/10] {p.title}")
             lines.append(f"  {p.link}")
             lines.append(f"  {p.summary}")
             lines.append("")
 
-    lines.append(f"--- Other papers triaged this window ({triage_total}) ---")
+    lines.append(f"--- Other Papers Reviewed ({triage_total}) ---")
     for row in triage_rows:
-        lines.append(f"  [{row.score:>2}] {row.published_date}  {row.title_short}")
+        lines.append(f"  [{row.score:>2}] {row.title_short}  {row.published_date}")
     if triage_total > len(triage_rows):
         lines.append(f"  ... + {triage_total - len(triage_rows)} more not shown")
     lines.append("")
