@@ -7,18 +7,41 @@
 # assistant: what you care about, what you don't, and any nuance that would
 # help someone judge a borderline paper.
 interests: |
-  I'm interested in mechanistic interpretability of large language models,
-  especially sparse autoencoders, feature circuits, and activation steering.
-  I also follow work on scaling laws, emergent capabilities, and evaluation
-  methodology for frontier models. I'm less interested in pure benchmark
-  leaderboard papers with no mechanistic or conceptual insight.
+  I'm interested in work around fair lending and algorithmic fairness in general, with a 
+  particular focus on new debiasing methodologies. Credit discrimination work can include
+  proxy discrimination (Disparate Treatment), Disparate Impact testing, Less Discriminatory
+  Alternative Search (LDA Search), and any activities by fair lending regulators (CFPB, 
+  HUD, FHFA, state agencies). The AI fairness work can be broader - anything to do with 
+  debiasing traditional (ex. logistic), machine learning (XGBoost, LightGBM), or LLM 
+  models. I am also interested in employment discrimination, explainability techniques for 
+  ML models, demographic imputation methods (BISG, HMDA data), and responsible AI in 
+  general. I'm OK with interdisciplinary work, but am less interested in econ, fairly 
+  interested in law, and most interested in code examples and technical methods (ML, CS). 
 
 arxiv:
   # arXiv search-query syntax: field prefixes (au:, abs:, ti:, cat:) combined
-  # with AND/OR/ANDNOT. Reference: https://arxiv.org/help/api/user-manual#query_details
+  # with AND/OR/ANDNOT; quote multi-word phrases so they match as a phrase,
+  # not as separate ORed words. Reference:
+  # https://arxiv.org/help/api/user-manual#query_details
   queries:
-    - "cat:cs.LG AND abs:interpretability"
-    - "cat:cs.CL AND abs:sparse autoencoder"
+    - 'abs:"less discriminatory alternative"'
+    - 'abs:"LDA search"'
+    - 'abs:"fair lending"'
+    - 'abs:"algorithmic fairness"'
+    - 'abs:"AI fairness"'
+    - 'abs:"algorithmic debiasing"'
+    - 'abs:"equal credit opportunity act"'
+    - 'abs:"fair housing act"'
+    - 'abs:"proxy discrimination"'
+    - 'abs:"credit discrimination"'
+    - 'abs:"Bayesian Improved Surname Geocoding"'
+    - 'abs:"Home Mortgage Disclosure Act"'
+    - 'abs:"adversarial debiasing"'
+    - 'abs:"disparate impact"'
+    - 'abs:"disparate treatment"'
+    - 'abs:"redlining"'
+    - 'abs:"bias mitigation"'
+    
   # Max results pulled per query, per day, before dedup.
   max_results_per_query: 50
   # Ignore anything first submitted more than this many days ago.
@@ -35,7 +58,7 @@ deep_read:
 google_sheets:
   # The long ID in your Google Sheet's URL:
   # https://docs.google.com/spreadsheets/d/THIS_PART_HERE/edit
-  sheet_id: "REPLACE_ME_WITH_YOUR_SHEET_ID"
+  sheet_id: "15BV2YSCyF3ITNu3omHxPx53VjB5tsvxXqheTJXlFtek"
   papers_tab: "papers"
   deep_reads_tab: "deep_reads"
 

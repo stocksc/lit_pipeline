@@ -152,6 +152,13 @@ single-user project.
 ## Cost
 
 Triage (Haiku, per abstract): well under $0.001/paper. Deep read (Opus,
-full PDF): roughly $0.05-0.15/paper depending on length. Actual spend
-depends entirely on how broad your queries and threshold are -- keep an eye
-on usage at console.anthropic.com for the first couple of weeks.
+full PDF): from real first-run data, ~$0.39/paper for a ~59K-input-token
+paper (dominated by input tokens, not output/thinking) -- notably higher
+than plain-text extraction would cost, which is the direct tradeoff of
+sending Claude the native PDF (it sees figures/tables/layout as rendered,
+not just extracted text; see the PDF-handling note in the architecture
+notes). Actual spend depends heavily on paper length and how broad your
+queries/threshold are -- every paper's exact token usage and cost is
+recorded per-row in the sheet (`triage_cost_usd`, `deep_read_cost_usd`),
+and the weekly report and `lit-backfill --dry-run` both summarize it, so
+keep an eye on those rather than assuming a fixed per-paper rate.
