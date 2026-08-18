@@ -17,31 +17,35 @@ interests: |
   ML models, demographic imputation methods (BISG, HMDA data), and responsible AI in 
   general. I'm OK with interdisciplinary work, but am less interested in econ, fairly 
   interested in law, and most interested in code examples and technical methods (ML, CS). 
+  If papers deal with domains outside of credit or employment, that's fine too if they have
+  an interesting enough contribution to fairness measurement or debiasing. A perfect 10 
+  would be a novel debiasing technique for machine learning models that would be applicable
+  to a credit scoring algorithm and comes with example Python code. 
 
 arxiv:
   # arXiv search-query syntax: field prefixes (au:, abs:, ti:, cat:) combined
   # with AND/OR/ANDNOT; quote multi-word phrases so they match as a phrase,
   # not as separate ORed words. Reference:
   # https://arxiv.org/help/api/user-manual#query_details
+  #
+  # All terms OR'd into a single query rather than one entry per term: each
+  # list entry is a separate arXiv API call (with a ~3s courtesy delay
+  # between them), so 17 separate entries meant ~17 sequential requests per
+  # run. Combining them into one call is functionally identical (verified:
+  # both return the same candidate set) and much faster. The tradeoff is
+  # losing the per-term match-count in the logs -- worth switching back to
+  # separate entries temporarily if you want to see which terms are actually
+  # pulling their weight.
   queries:
-    - 'abs:"less discriminatory alternative"'
-    - 'abs:"LDA search"'
-    - 'abs:"fair lending"'
-    - 'abs:"algorithmic fairness"'
-    - 'abs:"AI fairness"'
-    - 'abs:"algorithmic debiasing"'
-    - 'abs:"equal credit opportunity act"'
-    - 'abs:"fair housing act"'
-    - 'abs:"proxy discrimination"'
-    - 'abs:"credit discrimination"'
-    - 'abs:"Bayesian Improved Surname Geocoding"'
-    - 'abs:"Home Mortgage Disclosure Act"'
-    - 'abs:"adversarial debiasing"'
-    - 'abs:"disparate impact"'
-    - 'abs:"disparate treatment"'
-    - 'abs:"redlining"'
-    - 'abs:"bias mitigation"'
-    
+    - >-
+      abs:"less discriminatory alternative" OR abs:"LDA search" OR
+      abs:"fair lending" OR abs:"algorithmic fairness" OR abs:"AI fairness"
+      OR abs:"algorithmic debiasing" OR abs:"equal credit opportunity act"
+      OR abs:"fair housing act" OR abs:"proxy discrimination" OR
+      abs:"credit discrimination" OR abs:"Bayesian Improved Surname
+      Geocoding" OR abs:"Home Mortgage Disclosure Act" OR
+      abs:"adversarial debiasing" OR abs:"disparate impact" OR
+      abs:"disparate treatment" OR abs:"redlining" OR abs:"bias mitigation"
   # Max results pulled per query, per day, before dedup.
   max_results_per_query: 50
   # Ignore anything first submitted more than this many days ago.
