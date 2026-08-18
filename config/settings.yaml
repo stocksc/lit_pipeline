@@ -18,9 +18,9 @@ interests: |
   general. I'm OK with interdisciplinary work, but am less interested in econ, fairly 
   interested in law, and most interested in code examples and technical methods (ML, CS). 
   If papers deal with domains outside of credit or employment, that's fine too if they have
-  an interesting enough contribution to fairness measurement or debiasing. A perfect 10 
-  would be a novel debiasing technique for machine learning models that would be applicable
-  to a credit scoring algorithm and comes with example Python code. 
+  an interesting contribution to fairness measurement or debiasing. A perfect 10 would be a 
+  novel debiasing technique for machine learning models that would be applicable to a 
+  credit scoring algorithm and comes with example Python code. 
 
 arxiv:
   # arXiv search-query syntax: field prefixes (au:, abs:, ti:, cat:) combined

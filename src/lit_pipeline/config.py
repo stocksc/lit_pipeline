@@ -21,7 +21,13 @@ class ArxivSettings(BaseModel):
 
 class TriageSettings(BaseModel):
     model: str = "claude-haiku-4-5"
+    # Papers scoring >= this go on to deep-read (Opus, full paper).
     score_threshold: int = 7
+    # Papers scoring in [mid_summary_threshold, score_threshold) get a cheap
+    # ~50-word summary generated from the abstract alone (same model as
+    # triage, no PDF fetch). Below mid_summary_threshold, only the title
+    # shows up in the report -- no further LLM calls.
+    mid_summary_threshold: int = 4
 
 
 class DeepReadSettings(BaseModel):

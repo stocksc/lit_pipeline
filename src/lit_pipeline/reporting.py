@@ -1,13 +1,26 @@
 """Shared report-building logic for both the weekly cron digest and manual
 backfill runs (see backfill.py).
 
-Both callers need the same things -- a list of papers to show, a cost
-rollup, and a per-paper triage table -- but scoped differently:
+Reports have three tiers, driven by each paper's triage score:
+
+- **High** (score >= score_threshold): full Opus deep-read card --
+  `collect_report_papers` / `ReportPaper`.
+- **Mid** (mid_summary_threshold <= score < score_threshold): a cheap
+  ~50-word Haiku summary from the abstract alone, no authors/affiliations --
+  `collect_mid_tier_papers` / `MidTierPaper`.
+- **Low** (everything else triaged in the window): just title/date/score --
+  `collect_low_tier_table` / `TriagedPaperRow`. This is defined as "every
+  triaged paper not already shown in the high or mid tier" rather than by
+  score directly, which also gracefully catches any high/mid-tier paper
+  that errored out of its richer treatment (retries exhausted) -- it still
+  shows up here with at least a title instead of disappearing.
+
+Both callers need all of this, but scoped differently:
 
 - The weekly job scopes by *when the pipeline processed a paper* (`date_field
-  = "processed"`): triage cost/table keyed off `triaged_at`, the paper
-  list/deep-read cost keyed off `deep_read_at`. This is a trailing window
-  from "today."
+  = "processed"`): triage/mid-summary cost keyed off `triaged_at`/
+  `mid_summary_at`, the deep-read paper list/cost keyed off `deep_read_at`.
+  This is a trailing window from "today."
 - A backfill scopes by *when the paper was originally published on arXiv*
   (`date_field = "published"`): everything keyed off `published_date`
   instead, over an explicit start/end range. `deep_reads` rows don't carry
@@ -20,9 +33,7 @@ are calendar dates anyway.
 
 `compute_score_histogram` is kept for backfill.py's --dry-run console
 output (a 0-10 score distribution is a fast way to eyeball a large
-historical sweep before committing to deep-read cost); the email template
-itself uses `collect_triage_table` instead, a literal per-paper table
-capped at TRIAGE_TABLE_MAX_ROWS.
+historical sweep before committing to deep-read cost).
 """
 
 from __future__ import annotations
@@ -58,6 +69,16 @@ class ReportPaper:
 
 
 @dataclass
+class MidTierPaper:
+    arxiv_id: str
+    title: str
+    link: str
+    published_date: str
+    triage_score: int
+    summary: str
+
+
+@dataclass
 class TriagedPaperRow:
     published_date: str
     title_short: str
@@ -70,6 +91,10 @@ class CostSummary:
     triage_input_tokens: int
     triage_output_tokens: int
     triage_cost_usd: float
+    mid_summary_count: int
+    mid_summary_input_tokens: int
+    mid_summary_output_tokens: int
+    mid_summary_cost_usd: float
     deep_read_count: int
     deep_read_input_tokens: int
     deep_read_output_tokens: int
@@ -77,20 +102,21 @@ class CostSummary:
 
     @property
     def total_cost_usd(self) -> float:
-        return self.triage_cost_usd + self.deep_read_cost_usd
+        return self.triage_cost_usd + self.mid_summary_cost_usd + self.deep_read_cost_usd
 
     @property
     def total_input_tokens(self) -> int:
-        return self.triage_input_tokens + self.deep_read_input_tokens
+        return self.triage_input_tokens + self.mid_summary_input_tokens + self.deep_read_input_tokens
 
     @property
     def total_output_tokens(self) -> int:
-        return self.triage_output_tokens + self.deep_read_output_tokens
+        return self.triage_output_tokens + self.mid_summary_output_tokens + self.deep_read_output_tokens
 
 
 def parse_date(value: str) -> date | None:
     """Parses either a bare 'YYYY-MM-DD' (published_date) or a full ISO
-    timestamp ('...triaged_at'/'deep_read_at') and returns just the date."""
+    timestamp ('...triaged_at'/'deep_read_at'/'mid_summary_at') and returns
+    just the date."""
     if not value:
         return None
     try:
@@ -170,6 +196,37 @@ def collect_report_papers(
     return report_papers
 
 
+def collect_mid_tier_papers(
+    papers_records: list[dict], start: date, end: date, date_field: DateField
+) -> list[MidTierPaper]:
+    """Papers with a completed mid-tier summary (a non-empty `mid_summary`)
+    in the window. No authors/affiliations -- this tier skips the PDF fetch
+    entirely, so there's nothing to extract them from."""
+    results: list[MidTierPaper] = []
+    for record in papers_records:
+        summary = str(record.get("mid_summary", "")).strip()
+        if not summary:
+            continue
+        if date_field == "processed":
+            paper_date = parse_date(str(record.get("mid_summary_at", "")))
+        else:
+            paper_date = parse_date(str(record.get("published_date", "")))
+        if not _in_range(paper_date, start, end):
+            continue
+        results.append(
+            MidTierPaper(
+                arxiv_id=str(record.get("arxiv_id", "")),
+                title=str(record.get("title", "")),
+                link=str(record.get("link", "")),
+                published_date=str(record.get("published_date", "")),
+                triage_score=_safe_int(record.get("triage_score")),
+                summary=summary,
+            )
+        )
+    results.sort(key=lambda p: p.triage_score, reverse=True)
+    return results
+
+
 def compute_cost_summary(
     papers_records: list[dict],
     deep_read_records: list[dict],
@@ -178,22 +235,35 @@ def compute_cost_summary(
     date_field: DateField,
 ) -> CostSummary:
     """Triage cost covers every paper triaged in the window, regardless of
-    whether it cleared the threshold; deep-read cost covers only the subset
-    that did. Both are read straight from the per-paper cost columns the
-    pipeline writes (see sheets_store.py)."""
+    tier; mid-summary cost covers the subset that got a mid-tier summary;
+    deep-read cost covers the subset that got a full deep-read. All three
+    are read straight from the per-paper cost columns the pipeline writes
+    (see sheets_store.py)."""
     triage_count = triage_input = triage_output = 0
     triage_cost = 0.0
+    mid_summary_count = mid_summary_input = mid_summary_output = 0
+    mid_summary_cost = 0.0
     for record in papers_records:
         if date_field == "processed":
-            paper_date = parse_date(str(record.get("triaged_at", "")))
+            triage_date = parse_date(str(record.get("triaged_at", "")))
         else:
-            paper_date = parse_date(str(record.get("published_date", "")))
-        if not _in_range(paper_date, start, end):
-            continue
-        triage_count += 1
-        triage_input += _safe_int(record.get("triage_input_tokens"))
-        triage_output += _safe_int(record.get("triage_output_tokens"))
-        triage_cost += _safe_float(record.get("triage_cost_usd"))
+            triage_date = parse_date(str(record.get("published_date", "")))
+        if _in_range(triage_date, start, end):
+            triage_count += 1
+            triage_input += _safe_int(record.get("triage_input_tokens"))
+            triage_output += _safe_int(record.get("triage_output_tokens"))
+            triage_cost += _safe_float(record.get("triage_cost_usd"))
+
+        if str(record.get("mid_summary", "")).strip():
+            if date_field == "processed":
+                mid_date = parse_date(str(record.get("mid_summary_at", "")))
+            else:
+                mid_date = parse_date(str(record.get("published_date", "")))
+            if _in_range(mid_date, start, end):
+                mid_summary_count += 1
+                mid_summary_input += _safe_int(record.get("mid_summary_input_tokens"))
+                mid_summary_output += _safe_int(record.get("mid_summary_output_tokens"))
+                mid_summary_cost += _safe_float(record.get("mid_summary_cost_usd"))
 
     papers_by_id = {str(r["arxiv_id"]): r for r in papers_records if r.get("arxiv_id")}
     deep_read_count = deep_input = deep_output = 0
@@ -217,6 +287,10 @@ def compute_cost_summary(
         triage_input_tokens=triage_input,
         triage_output_tokens=triage_output,
         triage_cost_usd=triage_cost,
+        mid_summary_count=mid_summary_count,
+        mid_summary_input_tokens=mid_summary_input,
+        mid_summary_output_tokens=mid_summary_output,
+        mid_summary_cost_usd=mid_summary_cost,
         deep_read_count=deep_read_count,
         deep_read_input_tokens=deep_input,
         deep_read_output_tokens=deep_output,
@@ -248,16 +322,25 @@ def compute_score_histogram(
     return histogram
 
 
-def collect_triage_table(
-    papers_records: list[dict], start: date, end: date, date_field: DateField
+def collect_low_tier_table(
+    papers_records: list[dict],
+    exclude_ids: set[str],
+    start: date,
+    end: date,
+    date_field: DateField,
 ) -> tuple[list[TriagedPaperRow], int]:
-    """Every triaged paper in the window as (published_date, short title,
-    score) rows, sorted by score descending (ties by published_date
+    """Every triaged paper in the window NOT already shown in the high or
+    mid tier (pass the arxiv_ids from `collect_report_papers` and
+    `collect_mid_tier_papers` as `exclude_ids`) as (published_date, short
+    title, score) rows, sorted by score descending (ties by published_date
     descending) so a capped table always shows the most relevant papers
     first. Returns (rows capped at TRIAGE_TABLE_MAX_ROWS, total count before
     capping) so the caller can show a "+N more" note."""
     rows: list[TriagedPaperRow] = []
     for record in papers_records:
+        arxiv_id = str(record.get("arxiv_id", ""))
+        if arxiv_id in exclude_ids:
+            continue
         if date_field == "processed":
             paper_date = parse_date(str(record.get("triaged_at", "")))
         else:
@@ -283,6 +366,7 @@ def collect_triage_table(
 def render_report(
     report_title: str,
     papers: list[ReportPaper],
+    mid_tier_papers: list[MidTierPaper],
     costs: CostSummary,
     triage_rows: list[TriagedPaperRow],
     triage_total: int,
@@ -301,6 +385,7 @@ def render_report(
     html = template.render(
         report_title=report_title,
         papers=papers,
+        mid_tier_papers=mid_tier_papers,
         costs=costs,
         triage_rows=triage_rows,
         triage_total=triage_total,
@@ -321,7 +406,15 @@ def render_report(
             lines.append("  Limitations: " + "; ".join(p.limitations))
         lines.append("")
 
-    lines.append(f"--- Papers triaged this window ({triage_total}) ---")
+    if mid_tier_papers:
+        lines.append(f"--- Also relevant ({len(mid_tier_papers)}) ---")
+        for p in mid_tier_papers:
+            lines.append(f"[{p.triage_score}/10] {p.title}")
+            lines.append(f"  {p.link}")
+            lines.append(f"  {p.summary}")
+            lines.append("")
+
+    lines.append(f"--- Other papers triaged this window ({triage_total}) ---")
     for row in triage_rows:
         lines.append(f"  [{row.score:>2}] {row.published_date}  {row.title_short}")
     if triage_total > len(triage_rows):
@@ -330,15 +423,20 @@ def render_report(
 
     lines.append("--- Cost this window (estimated) ---")
     lines.append(
-        f"Triage:    {costs.triage_count} paper(s), "
+        f"Triage:      {costs.triage_count} paper(s), "
         f"{costs.triage_input_tokens + costs.triage_output_tokens:,} tokens, "
         f"${costs.triage_cost_usd:.4f}"
     )
     lines.append(
-        f"Deep read: {costs.deep_read_count} paper(s), "
+        f"Mid-summary: {costs.mid_summary_count} paper(s), "
+        f"{costs.mid_summary_input_tokens + costs.mid_summary_output_tokens:,} tokens, "
+        f"${costs.mid_summary_cost_usd:.4f}"
+    )
+    lines.append(
+        f"Deep read:   {costs.deep_read_count} paper(s), "
         f"{costs.deep_read_input_tokens + costs.deep_read_output_tokens:,} tokens, "
         f"${costs.deep_read_cost_usd:.4f}"
     )
-    lines.append(f"Total:     ${costs.total_cost_usd:.4f}")
+    lines.append(f"Total:       ${costs.total_cost_usd:.4f}")
     text = "\n".join(lines)
     return html, text

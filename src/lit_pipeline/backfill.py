@@ -31,7 +31,7 @@ from lit_pipeline import reporting, sheets_store
 from lit_pipeline.arxiv_client import fetch_candidates
 from lit_pipeline.config import load_settings
 from lit_pipeline.email_resend import send_email
-from lit_pipeline.pipeline_stages import run_deep_read_stage, run_triage_stage
+from lit_pipeline.pipeline_stages import run_deep_read_stage, run_mid_summary_stage, run_triage_stage
 from lit_pipeline.sheets_store import PaperRow
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -59,7 +59,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Ingest + triage only; print a score breakdown and stop before deep-read/email",
+        help="Ingest + triage + mid-summary only; print a score breakdown and stop before deep-read/email",
     )
     return parser.parse_args(argv)
 
@@ -115,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("%d paper(s) in range are tracked in the sheet (new + previously seen)", len(scoped_index))
 
     run_triage_stage(client, settings, papers_ws, scoped_index)
+    run_mid_summary_stage(client, settings, papers_ws, scoped_index)
 
     papers_records = _records_from_index(scoped_index)
     histogram = reporting.compute_score_histogram(papers_records, args.start_date, args.end_date, date_field="published")
@@ -138,21 +139,26 @@ def main(argv: list[str] | None = None) -> int:
 
     run_deep_read_stage(client, settings, papers_ws, deep_reads_ws, scoped_index)
 
-    papers_records = papers_ws.get_all_records()
-    deep_read_records = deep_reads_ws.get_all_records()
+    papers_records = sheets_store.get_all_records(papers_ws)
+    deep_read_records = sheets_store.get_all_records(deep_reads_ws)
     report_papers = reporting.collect_report_papers(
         papers_records, deep_read_records, args.start_date, args.end_date, date_field="published"
+    )
+    mid_tier_papers = reporting.collect_mid_tier_papers(
+        papers_records, args.start_date, args.end_date, date_field="published"
     )
     costs = reporting.compute_cost_summary(
         papers_records, deep_read_records, args.start_date, args.end_date, date_field="published"
     )
-    triage_rows, triage_total = reporting.collect_triage_table(
-        papers_records, args.start_date, args.end_date, date_field="published"
+    shown_ids = {p.arxiv_id for p in report_papers} | {p.arxiv_id for p in mid_tier_papers}
+    triage_rows, triage_total = reporting.collect_low_tier_table(
+        papers_records, shown_ids, args.start_date, args.end_date, date_field="published"
     )
 
     html, text = reporting.render_report(
         report_title=f"Backfill Digest ({args.start_date} to {args.end_date})",
         papers=report_papers,
+        mid_tier_papers=mid_tier_papers,
         costs=costs,
         triage_rows=triage_rows,
         triage_total=triage_total,
@@ -167,7 +173,11 @@ def main(argv: list[str] | None = None) -> int:
         html=html,
         text=text,
     )
-    logger.info("Backfill complete: %d paper(s) deep-read and emailed.", len(report_papers))
+    logger.info(
+        "Backfill complete: %d paper(s) deep-read, %d mid-tier, emailed.",
+        len(report_papers),
+        len(mid_tier_papers),
+    )
     return 0
 
 

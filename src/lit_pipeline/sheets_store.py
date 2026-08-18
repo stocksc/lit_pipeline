@@ -37,6 +37,10 @@ PAPERS_HEADERS = [
     "status", "triage_score", "triage_rationale", "matched_interest",
     "triage_input_tokens", "triage_output_tokens", "triage_cost_usd",
     "ingested_at", "triaged_at", "last_error", "retry_count",
+    # Appended at the end (rather than interspersed) so this migrates onto
+    # an existing sheet by just adding trailing columns, not reordering.
+    "mid_summary", "mid_summary_input_tokens", "mid_summary_output_tokens",
+    "mid_summary_cost_usd", "mid_summary_at",
 ]
 
 DEEP_READS_HEADERS = [
@@ -46,12 +50,19 @@ DEEP_READS_HEADERS = [
 ]
 
 # --- status lifecycle -------------------------------------------------
+# A triaged row's score routes it to exactly one of two further stages:
+# score >= score_threshold -> deep-read; mid_summary_threshold <= score <
+# score_threshold -> mid-summary; below mid_summary_threshold -> stays
+# "triaged" forever (title-only in reports, no further LLM calls).
 STATUS_INGESTED = "ingested"
 STATUS_TRIAGED = "triaged"
+STATUS_MID_SUMMARY_COMPLETE = "mid_summary_complete"
 STATUS_DEEP_READ_COMPLETE = "deep_read_complete"
 STATUS_TRIAGE_ERROR = "triage_error"
+STATUS_MID_SUMMARY_ERROR = "mid_summary_error"
 STATUS_DEEP_READ_ERROR = "deep_read_error"
 STATUS_TRIAGE_FAILED_PERMANENT = "triage_failed_permanent"
+STATUS_MID_SUMMARY_FAILED_PERMANENT = "mid_summary_failed_permanent"
 STATUS_DEEP_READ_FAILED_PERMANENT = "deep_read_failed_permanent"
 
 
@@ -104,6 +115,23 @@ def open_sheets(settings: GoogleSheetsSettings) -> tuple[gspread.Worksheet, gspr
     return papers_ws, deep_reads_ws
 
 
+def get_all_records(ws: gspread.Worksheet) -> list[dict]:
+    """`Worksheet.get_all_records()`, but with gspread's automatic
+    int/float coercion disabled for every column.
+
+    Without this, gspread "numericises" any cell that looks like a number --
+    including arxiv_id, which is numeric-looking (e.g. "2607.03180"). A
+    trailing zero in the 5-digit suffix is insignificant to a float, so
+    "2607.03180" silently becomes 2607.0318 on read, corrupting the id. That
+    breaks dedup (the corrupted key never matches a freshly-computed clean
+    id, so the paper looks "new" and gets re-ingested every run) and cross-
+    tier joins in reporting.py. Every numeric field we actually care about
+    (scores, token counts, costs, retry_count) is already parsed defensively
+    from strings elsewhere in this codebase (_safe_int/_safe_float/.isdigit()
+    checks), so disabling numericise entirely is safe."""
+    return ws.get_all_records(numericise_ignore=["all"])
+
+
 @dataclass
 class PaperRow:
     row_number: int  # 1-indexed sheet row (row 1 is the header)
@@ -120,7 +148,7 @@ def load_papers_index(papers_ws: gspread.Worksheet) -> dict[str, PaperRow]:
     This is the basis for both dedup (never re-ingest a known id) and resume
     (pick back up any row a prior crashed run left mid-stage, using `status`).
     """
-    records = papers_ws.get_all_records()
+    records = get_all_records(papers_ws)
     index: dict[str, PaperRow] = {}
     for i, record in enumerate(records):
         arxiv_id = str(record.get("arxiv_id", "")).strip()

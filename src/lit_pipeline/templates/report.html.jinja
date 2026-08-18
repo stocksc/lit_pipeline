@@ -51,10 +51,33 @@
             </td>
           </tr>
           {% endfor %}
+          {% if mid_tier_papers %}
+          <tr>
+            <td style="padding:16px 32px 4px 32px; background-color:#f9fafb;">
+              <div style="font-size:13px; font-weight:bold; color:#374151; text-transform:uppercase; letter-spacing:0.03em;">
+                Also relevant ({{ mid_tier_papers|length }})
+              </div>
+            </td>
+          </tr>
+          {% for paper in mid_tier_papers %}
+          <tr>
+            <td style="padding:12px 32px; background-color:#f9fafb; border-bottom:1px solid #e5e7eb;">
+              <div style="font-size:11px; font-weight:bold; color:#4b5563; background-color:#e5e7eb; display:inline-block; padding:1px 7px; border-radius:4px; margin-bottom:6px;">
+                SCORE {{ paper.triage_score }}/10
+              </div>
+              <div style="font-size:15px; font-weight:bold; line-height:1.3;">
+                <a href="{{ paper.link }}" style="color:#1a1a1a; text-decoration:none;">{{ paper.title }}</a>
+              </div>
+              <div style="font-size:12px; color:#9ca3af; margin-top:2px;">{{ paper.published_date }}</div>
+              <p style="font-size:13.5px; line-height:1.5; margin:8px 0 0 0; color:#374151;">{{ paper.summary }}</p>
+            </td>
+          </tr>
+          {% endfor %}
+          {% endif %}
           <tr>
             <td style="padding:20px 32px; background-color:#f9fafb; border-bottom:1px solid #e5e7eb;">
               <div style="font-size:13px; font-weight:bold; color:#374151; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:10px;">
-                Papers triaged this window ({{ triage_total }})
+                Other papers triaged this window ({{ triage_total }})
               </div>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px; color:#4b5563;">
                 <tr style="font-weight:bold; color:#374151;">
@@ -87,6 +110,11 @@
                   <td style="padding:3px 0;">Triage ({{ costs.triage_count }} paper{{ "s" if costs.triage_count != 1 else "" }})</td>
                   <td style="padding:3px 0; text-align:right;">{{ "{:,}".format(costs.triage_input_tokens + costs.triage_output_tokens) }} tokens</td>
                   <td style="padding:3px 0 3px 16px; text-align:right; font-variant-numeric:tabular-nums;">${{ "%.4f"|format(costs.triage_cost_usd) }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:3px 0;">Mid-summary ({{ costs.mid_summary_count }} paper{{ "s" if costs.mid_summary_count != 1 else "" }})</td>
+                  <td style="padding:3px 0; text-align:right;">{{ "{:,}".format(costs.mid_summary_input_tokens + costs.mid_summary_output_tokens) }} tokens</td>
+                  <td style="padding:3px 0 3px 16px; text-align:right; font-variant-numeric:tabular-nums;">${{ "%.4f"|format(costs.mid_summary_cost_usd) }}</td>
                 </tr>
                 <tr>
                   <td style="padding:3px 0;">Deep read ({{ costs.deep_read_count }} paper{{ "s" if costs.deep_read_count != 1 else "" }})</td>

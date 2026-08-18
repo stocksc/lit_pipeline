@@ -27,6 +27,14 @@ class TriageResult(BaseModel):
     )
 
 
+class MidSummaryResult(BaseModel):
+    """Cheap-model summary for mid-tier papers (scored between
+    mid_summary_threshold and score_threshold), generated from the abstract
+    alone -- no PDF fetch."""
+
+    summary: str = Field(description="A concise summary of the paper's abstract, in about 50 words.")
+
+
 class DeepReadResult(BaseModel):
     """Strong-model quick-hit summary of a full paper. Deliberately compact --
     these are click-through teasers, not full reviews."""

@@ -21,6 +21,7 @@ from lit_pipeline import pdf_extract, sheets_store
 from lit_pipeline.arxiv_client import PaperCandidate, download_pdf_bytes
 from lit_pipeline.config import Settings
 from lit_pipeline.llm_deep_read import deep_read_paper
+from lit_pipeline.llm_mid_summary import mid_summary_paper
 from lit_pipeline.llm_triage import triage_paper
 from lit_pipeline.sheets_store import PaperRow
 
@@ -103,6 +104,74 @@ def run_triage_stage(
             )
             row.status = sheets_store.STATUS_TRIAGED
             row.triage_score = result.score
+
+        if len(batched) >= TRIAGE_BATCH_SIZE:
+            sheets_store.flush_cell_updates(papers_ws, batched)
+
+    sheets_store.flush_cell_updates(papers_ws, batched)
+
+
+def run_mid_summary_stage(
+    client: Anthropic,
+    settings: Settings,
+    papers_ws: Worksheet,
+    index: dict[str, PaperRow],
+) -> None:
+    """Papers scoring in [mid_summary_threshold, score_threshold) get a
+    cheap ~50-word summary from the abstract alone -- no PDF fetch. Below
+    mid_summary_threshold, a row just stays "triaged" forever (title-only
+    in reports); this stage never touches those."""
+    to_summarize = [
+        row
+        for row in index.values()
+        if (
+            row.status == sheets_store.STATUS_TRIAGED
+            and settings.triage.mid_summary_threshold
+            <= (row.triage_score or 0)
+            < settings.triage.score_threshold
+        )
+        or (
+            row.status == sheets_store.STATUS_MID_SUMMARY_ERROR
+            and row.retry_count < settings.retries.max_retry_count
+        )
+    ]
+    logger.info("Mid-summarizing %d paper(s)", len(to_summarize))
+
+    batched: list[dict] = []
+    for row in to_summarize:
+        candidate = _candidate_from_row(row)
+        try:
+            result, usage = mid_summary_paper(client, settings.triage, settings.interests, candidate)
+        except Exception as exc:  # isolate any failure to this one paper
+            logger.warning("Mid-summary failed for %s: %s", row.arxiv_id, exc)
+            next_retry = row.retry_count + 1
+            status = (
+                sheets_store.STATUS_MID_SUMMARY_FAILED_PERMANENT
+                if next_retry >= settings.retries.max_retry_count
+                else sheets_store.STATUS_MID_SUMMARY_ERROR
+            )
+            batched.extend(
+                sheets_store.build_cell_updates(
+                    row.row_number,
+                    {"status": status, "last_error": str(exc)[:500], "retry_count": next_retry},
+                )
+            )
+        else:
+            batched.extend(
+                sheets_store.build_cell_updates(
+                    row.row_number,
+                    {
+                        "status": sheets_store.STATUS_MID_SUMMARY_COMPLETE,
+                        "mid_summary": result.summary,
+                        "mid_summary_input_tokens": usage.input_tokens,
+                        "mid_summary_output_tokens": usage.output_tokens,
+                        "mid_summary_cost_usd": round(usage.cost_usd, 6),
+                        "mid_summary_at": sheets_store.now_iso(),
+                        "last_error": "",
+                    },
+                )
+            )
+            row.status = sheets_store.STATUS_MID_SUMMARY_COMPLETE
 
         if len(batched) >= TRIAGE_BATCH_SIZE:
             sheets_store.flush_cell_updates(papers_ws, batched)

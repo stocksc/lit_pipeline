@@ -33,8 +33,8 @@ def main() -> int:
     load_dotenv()
     settings = load_settings()
     papers_ws, deep_reads_ws = sheets_store.open_sheets(settings.google_sheets)
-    papers_records = papers_ws.get_all_records()
-    deep_read_records = deep_reads_ws.get_all_records()
+    papers_records = sheets_store.get_all_records(papers_ws)
+    deep_read_records = sheets_store.get_all_records(deep_reads_ws)
 
     window_end = datetime.now(timezone.utc).date()
     window_start = window_end - timedelta(days=settings.weekly_report.lookback_days)
@@ -42,23 +42,31 @@ def main() -> int:
     papers = reporting.collect_report_papers(
         papers_records, deep_read_records, window_start, window_end, date_field="processed"
     )
+    mid_tier_papers = reporting.collect_mid_tier_papers(
+        papers_records, window_start, window_end, date_field="processed"
+    )
     costs = reporting.compute_cost_summary(
         papers_records, deep_read_records, window_start, window_end, date_field="processed"
     )
-    triage_rows, triage_total = reporting.collect_triage_table(
-        papers_records, window_start, window_end, date_field="processed"
+    shown_ids = {p.arxiv_id for p in papers} | {p.arxiv_id for p in mid_tier_papers}
+    triage_rows, triage_total = reporting.collect_low_tier_table(
+        papers_records, shown_ids, window_start, window_end, date_field="processed"
     )
     logger.info(
-        "Weekly report covers %d paper(s); estimated cost $%.4f (triage $%.4f, deep-read $%.4f)",
+        "Weekly report covers %d full paper(s), %d mid-tier; estimated cost $%.4f "
+        "(triage $%.4f, mid-summary $%.4f, deep-read $%.4f)",
         len(papers),
+        len(mid_tier_papers),
         costs.total_cost_usd,
         costs.triage_cost_usd,
+        costs.mid_summary_cost_usd,
         costs.deep_read_cost_usd,
     )
 
     html, text = reporting.render_report(
         report_title=settings.weekly_report.subject_prefix,
         papers=papers,
+        mid_tier_papers=mid_tier_papers,
         costs=costs,
         triage_rows=triage_rows,
         triage_total=triage_total,

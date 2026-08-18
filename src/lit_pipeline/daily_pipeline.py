@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 from lit_pipeline import sheets_store
 from lit_pipeline.arxiv_client import fetch_candidates
 from lit_pipeline.config import load_settings
-from lit_pipeline.pipeline_stages import run_deep_read_stage, run_triage_stage
+from lit_pipeline.pipeline_stages import run_deep_read_stage, run_mid_summary_stage, run_triage_stage
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -45,6 +45,7 @@ def main() -> int:
     index = sheets_store.load_papers_index(papers_ws)
 
     run_triage_stage(anthropic_client, settings, papers_ws, index)
+    run_mid_summary_stage(anthropic_client, settings, papers_ws, index)
     run_deep_read_stage(anthropic_client, settings, papers_ws, deep_reads_ws, index)
 
     logger.info("Daily pipeline complete.")
