@@ -33,6 +33,12 @@ class TriageSettings(BaseModel):
 
 class DeepReadSettings(BaseModel):
     model: str = "claude-opus-5"
+    # Safety-net cap on how many PDF pages get extracted, applied on top of
+    # the references-heading cut in pdf_extract.py (which does the real
+    # cost-saving work). Generous by design -- comfortably above any
+    # legitimate paper, only meant to bound the rare pathological outlier
+    # (e.g. a 200+ page thesis) where the references cut can't be trusted.
+    max_pdf_pages: int = 50
 
 
 class GoogleSheetsSettings(BaseModel):

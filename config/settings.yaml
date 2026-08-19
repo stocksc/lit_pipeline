@@ -60,6 +60,14 @@ triage:
 
 deep_read:
   model: "claude-opus-5"
+  # Safety-net page cap for PDF extraction -- the real cost-saving happens
+  # via a references-heading cut in pdf_extract.py (drops the bibliography
+  # and anything after it, e.g. appendices). This cap only exists to bound
+  # the rare pathological outlier where that heading can't be trusted (a
+  # long thesis-style document with several "References" headings in it).
+  # 50 is comfortably above every legitimate paper seen so far (longest is
+  # 53 pages) while still cutting a 257-page outlier by ~80%.
+  max_pdf_pages: 50
 
 google_sheets:
   # The long ID in your Google Sheet's URL:

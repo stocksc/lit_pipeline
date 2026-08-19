@@ -205,7 +205,7 @@ def run_deep_read_stage(
         candidate = _candidate_from_row(row)
         try:
             pdf_bytes = download_pdf_bytes(candidate.pdf_url)
-            pdf_text = pdf_extract.extract_pdf_text(pdf_bytes)
+            pdf_text = pdf_extract.extract_pdf_text(pdf_bytes, max_pages=settings.deep_read.max_pdf_pages)
             result, usage = deep_read_paper(client, settings.deep_read, settings.interests, candidate, pdf_text)
         except Exception as exc:  # isolate any failure (download, extraction, API) to this one paper
             logger.warning("Deep read failed for %s: %s", row.arxiv_id, exc)
