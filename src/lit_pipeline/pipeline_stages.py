@@ -92,6 +92,7 @@ def run_triage_stage(
                     {
                         "status": sheets_store.STATUS_TRIAGED,
                         "triage_score": result.score,
+                        "original_triage_score": result.score,
                         "triage_rationale": result.rationale,
                         "matched_interest": result.matched_interest or "",
                         "triage_input_tokens": usage.input_tokens,
@@ -228,6 +229,10 @@ def run_deep_read_stage(
             papers_ws,
             sheets_store.build_cell_updates(
                 row.row_number,
-                {"status": sheets_store.STATUS_DEEP_READ_COMPLETE, "last_error": ""},
+                {
+                    "status": sheets_store.STATUS_DEEP_READ_COMPLETE,
+                    "triage_score": result.score,
+                    "last_error": "",
+                },
             ),
         )

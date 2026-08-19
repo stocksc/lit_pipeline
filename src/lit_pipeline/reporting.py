@@ -163,6 +163,7 @@ def collect_report_papers(
     start: date,
     end: date,
     date_field: DateField,
+    score_threshold: int,
 ) -> list[ReportPaper]:
     papers_by_id = {str(r["arxiv_id"]): r for r in papers_records if r.get("arxiv_id")}
 
@@ -172,6 +173,15 @@ def collect_report_papers(
         paper = papers_by_id.get(arxiv_id)
         if paper is None:
             logger.warning("deep_reads row %s has no matching papers row; skipping", arxiv_id)
+            continue
+
+        # `triage_score` is Opus's re-rating as of the deep-read (see
+        # pipeline_stages.run_deep_read_stage), not the original Haiku
+        # triage score -- a paper re-rated below threshold no longer
+        # qualifies for the high tier, even though its deep_reads row
+        # still exists. It falls to collect_mid_tier_papers/
+        # collect_low_tier_table instead.
+        if _safe_int(paper.get("triage_score")) < score_threshold:
             continue
 
         if date_field == "processed":
@@ -206,12 +216,33 @@ def collect_report_papers(
 
 
 def collect_mid_tier_papers(
-    papers_records: list[dict], start: date, end: date, date_field: DateField
+    papers_records: list[dict],
+    deep_read_records: list[dict],
+    start: date,
+    end: date,
+    date_field: DateField,
+    mid_summary_threshold: int,
+    score_threshold: int,
 ) -> list[MidTierPaper]:
-    """Papers with a completed mid-tier summary (a non-empty `mid_summary`)
-    in the window. No authors/affiliations -- this tier skips the PDF fetch
-    entirely, so there's nothing to extract them from."""
+    """Two sources feed this tier:
+
+    1. The cheap path: papers with a completed mid-tier summary (a
+       non-empty `mid_summary`), scored via Haiku from the abstract alone --
+       no authors/affiliations, since this path skips the PDF fetch
+       entirely.
+    2. The downgraded-deep-read path: a paper that got a full Opus
+       deep-read, but whose re-rated `triage_score` (see
+       pipeline_stages.run_deep_read_stage) landed in the mid band instead
+       of the high band. These reuse `deep_reads.summary` as-is rather than
+       requesting a second, shorter summary.
+
+    Band-exclusivity in routing means a given paper should only ever match
+    one of the two sources, but arxiv_id is used to dedup defensively
+    anyway.
+    """
     results: list[MidTierPaper] = []
+    seen_ids: set[str] = set()
+
     for record in papers_records:
         summary = str(record.get("mid_summary", "")).strip()
         if not summary:
@@ -222,9 +253,10 @@ def collect_mid_tier_papers(
             paper_date = parse_date(str(record.get("published_date", "")))
         if not _in_range(paper_date, start, end):
             continue
+        arxiv_id = str(record.get("arxiv_id", ""))
         results.append(
             MidTierPaper(
-                arxiv_id=str(record.get("arxiv_id", "")),
+                arxiv_id=arxiv_id,
                 title=str(record.get("title", "")),
                 link=str(record.get("link", "")),
                 published_date=str(record.get("published_date", "")),
@@ -232,6 +264,37 @@ def collect_mid_tier_papers(
                 summary=summary,
             )
         )
+        seen_ids.add(arxiv_id)
+
+    papers_by_id = {str(r["arxiv_id"]): r for r in papers_records if r.get("arxiv_id")}
+    for record in deep_read_records:
+        arxiv_id = str(record.get("arxiv_id", ""))
+        if arxiv_id in seen_ids:
+            continue
+        paper = papers_by_id.get(arxiv_id)
+        if paper is None:
+            continue
+        score = _safe_int(paper.get("triage_score"))
+        if not (mid_summary_threshold <= score < score_threshold):
+            continue
+        if date_field == "processed":
+            paper_date = parse_date(str(record.get("deep_read_at", "")))
+        else:
+            paper_date = parse_date(str(paper.get("published_date", "")))
+        if not _in_range(paper_date, start, end):
+            continue
+        results.append(
+            MidTierPaper(
+                arxiv_id=arxiv_id,
+                title=str(paper.get("title", "")),
+                link=str(paper.get("link", "")),
+                published_date=str(paper.get("published_date", "")),
+                triage_score=score,
+                summary=str(record.get("summary", "")),
+            )
+        )
+        seen_ids.add(arxiv_id)
+
     results.sort(key=lambda p: p.triage_score, reverse=True)
     return results
 

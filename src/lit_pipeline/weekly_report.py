@@ -40,10 +40,21 @@ def main() -> int:
     window_start = window_end - timedelta(days=settings.weekly_report.lookback_days)
 
     papers = reporting.collect_report_papers(
-        papers_records, deep_read_records, window_start, window_end, date_field="processed"
+        papers_records,
+        deep_read_records,
+        window_start,
+        window_end,
+        date_field="processed",
+        score_threshold=settings.triage.score_threshold,
     )
     mid_tier_papers = reporting.collect_mid_tier_papers(
-        papers_records, window_start, window_end, date_field="processed"
+        papers_records,
+        deep_read_records,
+        window_start,
+        window_end,
+        date_field="processed",
+        mid_summary_threshold=settings.triage.mid_summary_threshold,
+        score_threshold=settings.triage.score_threshold,
     )
     costs = reporting.compute_cost_summary(
         papers_records, deep_read_records, window_start, window_end, date_field="processed"

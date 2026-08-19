@@ -41,12 +41,20 @@ PAPERS_HEADERS = [
     # an existing sheet by just adding trailing columns, not reordering.
     "mid_summary", "mid_summary_input_tokens", "mid_summary_output_tokens",
     "mid_summary_cost_usd", "mid_summary_at",
+    # The Haiku triage score, written once and never touched again --
+    # `triage_score` itself gets overwritten with Opus's re-rating after a
+    # deep-read, so this is the only place the original guess survives.
+    "original_triage_score",
 ]
 
 DEEP_READS_HEADERS = [
     "arxiv_id", "summary", "relevance", "limitations", "author_affiliations",
     "deep_read_input_tokens", "deep_read_output_tokens", "deep_read_cost_usd",
     "deep_read_at",
+    # Opus's own re-rating of the paper, based on the full text rather than
+    # just the abstract. This is also copied onto `papers.triage_score` so
+    # report tiering always reflects the best-known score.
+    "score",
 ]
 
 # --- status lifecycle -------------------------------------------------
@@ -231,5 +239,6 @@ def append_deep_read(
         usage.output_tokens,
         round(usage.cost_usd, 6),
         now_iso(),
+        result.score,
     ]
     deep_reads_ws.append_row(row, value_input_option="RAW")

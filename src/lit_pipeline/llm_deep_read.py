@@ -33,10 +33,14 @@ the extracted text of a paper. The researcher will click through to the paper \
 itself for full detail, so produce a compact, quick-hit summary, not a full \
 review:
 
-1. A summary of the paper in about 100 words.
-2. Relevance: bullet points (about 50 words total) on why this paper is \
+1. Score: your own 0-10 relevance rating, using the same scale and interests \
+as an initial triage pass would, but now based on the full paper you've \
+actually read rather than just an abstract. Rate independently -- it's \
+expected and fine for this to differ from any earlier triage score.
+2. A summary of the paper in about 100 words.
+3. Relevance: bullet points (about 50 words total) on why this paper is \
 relevant to the researcher's stated interests.
-3. Limitations: bullet points (about 50 words total) on what makes this paper \
+4. Limitations: bullet points (about 50 words total) on what makes this paper \
 NOT directly useful for a practitioner -- e.g. no code/data released, \
 synthetic-only validation, proprietary data required, purely theoretical, \
 inapplicable to a regulated setting. This is about practical applicability, \
@@ -76,6 +80,8 @@ def deep_read_paper(
     result = message.parsed_output
     if result is None:
         raise ValueError(f"Deep-read call for {candidate.arxiv_id} returned no parsed output")
+    # Defensive clamp -- the schema declares 0-10 bounds, but don't trust it blindly.
+    result.score = max(0, min(10, result.score))
     usage = LLMUsage(
         model=settings.model,
         input_tokens=message.usage.input_tokens,

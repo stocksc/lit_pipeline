@@ -142,10 +142,21 @@ def main(argv: list[str] | None = None) -> int:
     papers_records = sheets_store.get_all_records(papers_ws)
     deep_read_records = sheets_store.get_all_records(deep_reads_ws)
     report_papers = reporting.collect_report_papers(
-        papers_records, deep_read_records, args.start_date, args.end_date, date_field="published"
+        papers_records,
+        deep_read_records,
+        args.start_date,
+        args.end_date,
+        date_field="published",
+        score_threshold=settings.triage.score_threshold,
     )
     mid_tier_papers = reporting.collect_mid_tier_papers(
-        papers_records, args.start_date, args.end_date, date_field="published"
+        papers_records,
+        deep_read_records,
+        args.start_date,
+        args.end_date,
+        date_field="published",
+        mid_summary_threshold=settings.triage.mid_summary_threshold,
+        score_threshold=settings.triage.score_threshold,
     )
     costs = reporting.compute_cost_summary(
         papers_records, deep_read_records, args.start_date, args.end_date, date_field="published"

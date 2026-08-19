@@ -39,6 +39,17 @@ class DeepReadResult(BaseModel):
     """Strong-model quick-hit summary of a full paper. Deliberately compact --
     these are click-through teasers, not full reviews."""
 
+    score: int = Field(
+        ge=0,
+        le=10,
+        description=(
+            "Your own relevance rating for this paper on the same 0-10 scale as the "
+            "initial triage, now informed by the full paper text rather than just the "
+            "abstract. Rate independently based on the researcher's stated interests and "
+            "what you've actually read -- it's expected and fine for this to come out "
+            "lower (or higher) than the paper's original triage score."
+        ),
+    )
     summary: str = Field(description="A concise summary of the paper, in about 100 words.")
     relevance: list[str] = Field(
         description=(
