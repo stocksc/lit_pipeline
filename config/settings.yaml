@@ -8,9 +8,9 @@
 # help someone judge a borderline paper.
 interests: |
   I'm interested in work around fair lending and algorithmic fairness in general, with a 
-  particular focus on new debiasing methodologies. Credit discrimination work can include
+  particular focus on new debiasing methodologies. Discrimination work can include
   proxy discrimination (Disparate Treatment), Disparate Impact testing, Less Discriminatory
-  Alternative Search (LDA Search), and any activities by fair lending regulators (CFPB, 
+  Alternative Search (LDA Search), and any activities by fairness regulators (CFPB, 
   HUD, FHFA, state agencies). The AI fairness work can be broader - anything to do with 
   debiasing traditional (ex. logistic), machine learning (XGBoost, LightGBM), or LLM 
   models. I am also interested in employment discrimination, explainability techniques for 
@@ -20,7 +20,9 @@ interests: |
   If papers deal with domains outside of credit or employment, that's fine too if they have
   an interesting contribution to fairness measurement or debiasing. A perfect 10 would be a 
   novel debiasing technique for machine learning models that would be applicable to a 
-  credit scoring algorithm and comes with example Python code. 
+  credit scoring algorithm and comes with example Python code. If a paper is perfectly 
+  responsive to one of my interests it can still be rated highly, even if it doesn't check
+  every box. 
 
 arxiv:
   # arXiv search-query syntax: field prefixes (au:, abs:, ti:, cat:) combined
