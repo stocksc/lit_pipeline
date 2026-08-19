@@ -3,10 +3,10 @@
 Entry point: `uv run lit-weekly` (see pyproject.toml [project.scripts]).
 
 Deterministic templating over data the daily pipeline already stored -- no
-extra LLM call, fully predictable output. Scoped by `date_field="processed"`
-(see reporting.py): a paper only becomes "reportable" once its deep read
-actually finishes, and a trailing window naturally never re-includes a paper
-once it ages out, with no separate "already emailed" flag needed.
+extra LLM call, fully predictable output. Scoped by arXiv `published_date`
+(see reporting.py) over a trailing window from today -- a manual backfill
+run for some other historical range doesn't leak into this week's email
+just because it happened to finish processing during this week.
 
 The actual paper-list/cost/triage-table logic lives in reporting.py, shared
 with backfill.py (which scopes by arXiv publish date over an explicit range
@@ -44,7 +44,6 @@ def main() -> int:
         deep_read_records,
         window_start,
         window_end,
-        date_field="processed",
         score_threshold=settings.triage.score_threshold,
     )
     mid_tier_papers = reporting.collect_mid_tier_papers(
@@ -52,17 +51,12 @@ def main() -> int:
         deep_read_records,
         window_start,
         window_end,
-        date_field="processed",
         mid_summary_threshold=settings.triage.mid_summary_threshold,
         score_threshold=settings.triage.score_threshold,
     )
-    costs = reporting.compute_cost_summary(
-        papers_records, deep_read_records, window_start, window_end, date_field="processed"
-    )
+    costs = reporting.compute_cost_summary(papers_records, deep_read_records, window_start, window_end)
     shown_ids = {p.arxiv_id for p in papers} | {p.arxiv_id for p in mid_tier_papers}
-    triage_rows, triage_total = reporting.collect_low_tier_table(
-        papers_records, shown_ids, window_start, window_end, date_field="processed"
-    )
+    triage_rows, triage_total = reporting.collect_low_tier_table(papers_records, shown_ids, window_start, window_end)
     logger.info(
         "Weekly report covers %d full paper(s), %d mid-tier; estimated cost $%.4f "
         "(triage $%.4f, mid-summary $%.4f, deep-read $%.4f)",

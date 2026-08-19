@@ -6,8 +6,8 @@ Entry point: `uv run lit-backfill --start-date 2024-01-01 --end-date 2024-01-31`
 Runs the same ingest -> triage -> deep-read -> email pipeline as the daily/
 weekly cron jobs, but scoped to an explicit [start_date, end_date] window
 matched against each paper's arXiv *publish* date (not when the backfill
-happens to run) -- see arxiv_client.fetch_candidates and reporting.py's
-date_field="published" mode. Reuses the exact same triage/deep-read stage
+happens to run) -- see arxiv_client.fetch_candidates and reporting.py.
+Reuses the exact same triage/deep-read stage
 functions as the daily job (pipeline_stages.py), just handed a pre-filtered
 index so a backfill run never touches unrelated pending rows left over from
 regular daily runs.
@@ -118,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     run_mid_summary_stage(client, settings, papers_ws, scoped_index)
 
     papers_records = _records_from_index(scoped_index)
-    histogram = reporting.compute_score_histogram(papers_records, args.start_date, args.end_date, date_field="published")
+    histogram = reporting.compute_score_histogram(papers_records, args.start_date, args.end_date)
     total_triaged = sum(histogram.values())
     at_or_above = sum(count for score, count in histogram.items() if score >= settings.triage.score_threshold)
 
@@ -146,7 +146,6 @@ def main(argv: list[str] | None = None) -> int:
         deep_read_records,
         args.start_date,
         args.end_date,
-        date_field="published",
         score_threshold=settings.triage.score_threshold,
     )
     mid_tier_papers = reporting.collect_mid_tier_papers(
@@ -154,17 +153,12 @@ def main(argv: list[str] | None = None) -> int:
         deep_read_records,
         args.start_date,
         args.end_date,
-        date_field="published",
         mid_summary_threshold=settings.triage.mid_summary_threshold,
         score_threshold=settings.triage.score_threshold,
     )
-    costs = reporting.compute_cost_summary(
-        papers_records, deep_read_records, args.start_date, args.end_date, date_field="published"
-    )
+    costs = reporting.compute_cost_summary(papers_records, deep_read_records, args.start_date, args.end_date)
     shown_ids = {p.arxiv_id for p in report_papers} | {p.arxiv_id for p in mid_tier_papers}
-    triage_rows, triage_total = reporting.collect_low_tier_table(
-        papers_records, shown_ids, args.start_date, args.end_date, date_field="published"
-    )
+    triage_rows, triage_total = reporting.collect_low_tier_table(papers_records, shown_ids, args.start_date, args.end_date)
 
     # report_title (no date -- shown in the email body) and subject (keeps
     # the date -- shown in the mail client's subject line) deliberately

@@ -15,21 +15,17 @@ Reports have three tiers, driven by each paper's triage score:
   that errored out of its richer treatment (retries exhausted) -- it still
   shows up here with at least a title instead of disappearing.
 
-Both callers need all of this, but scoped differently:
-
-- The weekly job scopes by *when the pipeline processed a paper* (`date_field
-  = "processed"`): triage/mid-summary cost keyed off `triaged_at`/
-  `mid_summary_at`, the deep-read paper list/cost keyed off `deep_read_at`.
-  This is a trailing window from "today."
-- A backfill scopes by *when the paper was originally published on arXiv*
-  (`date_field = "published"`): everything keyed off `published_date`
-  instead, over an explicit start/end range. `deep_reads` rows don't carry
-  `published_date` themselves, so that mode always joins back to the papers
-  row for it.
+Both callers scope by *when the paper was originally published on arXiv*
+(`published_date`), not by when the pipeline happened to process it --
+that keeps a manual backfill's papers confined to the historical window it
+was run for, instead of leaking into whatever regular weekly digest
+happens to run afterward just because that's when they were evaluated.
+`deep_reads` rows don't carry `published_date` themselves, so anything
+keyed off a `deep_reads` row joins back to the `papers` row for it.
 
 All date comparisons are date-only (no time-of-day), which is a deliberate
-simplification -- irrelevant at once-daily cadence, and backfill's CLI dates
-are calendar dates anyway.
+simplification -- irrelevant at once-daily cadence, and both callers' date
+ranges are calendar dates anyway.
 
 `compute_score_histogram` is kept for backfill.py's --dry-run console
 output (a 0-10 score distribution is a fast way to eyeball a large
@@ -42,15 +38,12 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Literal
 
 from jinja2 import Environment, FileSystemLoader
 
 logger = logging.getLogger(__name__)
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
-
-DateField = Literal["processed", "published"]
 
 TITLE_SHORT_LENGTH = 100
 
@@ -162,7 +155,6 @@ def collect_report_papers(
     deep_read_records: list[dict],
     start: date,
     end: date,
-    date_field: DateField,
     score_threshold: int,
 ) -> list[ReportPaper]:
     papers_by_id = {str(r["arxiv_id"]): r for r in papers_records if r.get("arxiv_id")}
@@ -184,10 +176,7 @@ def collect_report_papers(
         if _safe_int(paper.get("triage_score")) < score_threshold:
             continue
 
-        if date_field == "processed":
-            paper_date = parse_date(str(record.get("deep_read_at", "")))
-        else:
-            paper_date = parse_date(str(paper.get("published_date", "")))
+        paper_date = parse_date(str(paper.get("published_date", "")))
         if not _in_range(paper_date, start, end):
             continue
 
@@ -220,7 +209,6 @@ def collect_mid_tier_papers(
     deep_read_records: list[dict],
     start: date,
     end: date,
-    date_field: DateField,
     mid_summary_threshold: int,
     score_threshold: int,
 ) -> list[MidTierPaper]:
@@ -247,10 +235,7 @@ def collect_mid_tier_papers(
         summary = str(record.get("mid_summary", "")).strip()
         if not summary:
             continue
-        if date_field == "processed":
-            paper_date = parse_date(str(record.get("mid_summary_at", "")))
-        else:
-            paper_date = parse_date(str(record.get("published_date", "")))
+        paper_date = parse_date(str(record.get("published_date", "")))
         if not _in_range(paper_date, start, end):
             continue
         arxiv_id = str(record.get("arxiv_id", ""))
@@ -277,10 +262,7 @@ def collect_mid_tier_papers(
         score = _safe_int(paper.get("triage_score"))
         if not (mid_summary_threshold <= score < score_threshold):
             continue
-        if date_field == "processed":
-            paper_date = parse_date(str(record.get("deep_read_at", "")))
-        else:
-            paper_date = parse_date(str(paper.get("published_date", "")))
+        paper_date = parse_date(str(paper.get("published_date", "")))
         if not _in_range(paper_date, start, end):
             continue
         results.append(
@@ -304,7 +286,6 @@ def compute_cost_summary(
     deep_read_records: list[dict],
     start: date,
     end: date,
-    date_field: DateField,
 ) -> CostSummary:
     """Triage cost covers every paper triaged in the window, regardless of
     tier; mid-summary cost covers the subset that got a mid-tier summary;
@@ -316,26 +297,20 @@ def compute_cost_summary(
     mid_summary_count = mid_summary_input = mid_summary_output = 0
     mid_summary_cost = 0.0
     for record in papers_records:
-        if date_field == "processed":
-            triage_date = parse_date(str(record.get("triaged_at", "")))
-        else:
-            triage_date = parse_date(str(record.get("published_date", "")))
-        if _in_range(triage_date, start, end):
+        paper_date = parse_date(str(record.get("published_date", "")))
+        in_window = _in_range(paper_date, start, end)
+
+        if in_window:
             triage_count += 1
             triage_input += _safe_int(record.get("triage_input_tokens"))
             triage_output += _safe_int(record.get("triage_output_tokens"))
             triage_cost += _safe_float(record.get("triage_cost_usd"))
 
-        if str(record.get("mid_summary", "")).strip():
-            if date_field == "processed":
-                mid_date = parse_date(str(record.get("mid_summary_at", "")))
-            else:
-                mid_date = parse_date(str(record.get("published_date", "")))
-            if _in_range(mid_date, start, end):
-                mid_summary_count += 1
-                mid_summary_input += _safe_int(record.get("mid_summary_input_tokens"))
-                mid_summary_output += _safe_int(record.get("mid_summary_output_tokens"))
-                mid_summary_cost += _safe_float(record.get("mid_summary_cost_usd"))
+        if in_window and str(record.get("mid_summary", "")).strip():
+            mid_summary_count += 1
+            mid_summary_input += _safe_int(record.get("mid_summary_input_tokens"))
+            mid_summary_output += _safe_int(record.get("mid_summary_output_tokens"))
+            mid_summary_cost += _safe_float(record.get("mid_summary_cost_usd"))
 
     papers_by_id = {str(r["arxiv_id"]): r for r in papers_records if r.get("arxiv_id")}
     deep_read_count = deep_input = deep_output = 0
@@ -343,10 +318,7 @@ def compute_cost_summary(
     for record in deep_read_records:
         arxiv_id = str(record.get("arxiv_id", ""))
         paper = papers_by_id.get(arxiv_id)
-        if date_field == "processed":
-            paper_date = parse_date(str(record.get("deep_read_at", "")))
-        else:
-            paper_date = parse_date(str(paper.get("published_date", ""))) if paper else None
+        paper_date = parse_date(str(paper.get("published_date", ""))) if paper else None
         if not _in_range(paper_date, start, end):
             continue
         deep_read_count += 1
@@ -370,19 +342,12 @@ def compute_cost_summary(
     )
 
 
-def compute_score_histogram(
-    papers_records: list[dict], start: date, end: date, date_field: DateField
-) -> dict[int, int]:
+def compute_score_histogram(papers_records: list[dict], start: date, end: date) -> dict[int, int]:
     """Counts triaged papers by score (0-10), zero-filled, over the window.
-    Used by backfill.py's --dry-run console output. `date_field="published"`
-    and `"processed"` both key off fields already on the papers row
-    (published_date / triaged_at) -- no join needed."""
+    Used by backfill.py's --dry-run console output."""
     histogram = {score: 0 for score in range(11)}
     for record in papers_records:
-        if date_field == "processed":
-            paper_date = parse_date(str(record.get("triaged_at", "")))
-        else:
-            paper_date = parse_date(str(record.get("published_date", "")))
+        paper_date = parse_date(str(record.get("published_date", "")))
         if not _in_range(paper_date, start, end):
             continue
         score_raw = str(record.get("triage_score", "")).strip()
@@ -399,7 +364,6 @@ def collect_low_tier_table(
     exclude_ids: set[str],
     start: date,
     end: date,
-    date_field: DateField,
 ) -> tuple[list[TriagedPaperRow], int]:
     """Every triaged paper in the window NOT already shown in the high or
     mid tier (pass the arxiv_ids from `collect_report_papers` and
@@ -413,10 +377,7 @@ def collect_low_tier_table(
         arxiv_id = str(record.get("arxiv_id", ""))
         if arxiv_id in exclude_ids:
             continue
-        if date_field == "processed":
-            paper_date = parse_date(str(record.get("triaged_at", "")))
-        else:
-            paper_date = parse_date(str(record.get("published_date", "")))
+        paper_date = parse_date(str(record.get("published_date", "")))
         if not _in_range(paper_date, start, end):
             continue
         score_raw = str(record.get("triage_score", "")).strip()
