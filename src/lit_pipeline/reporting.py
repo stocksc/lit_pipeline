@@ -52,8 +52,7 @@ TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
 DateField = Literal["processed", "published"]
 
-TRIAGE_TABLE_MAX_ROWS = 25
-TITLE_SHORT_LENGTH = 70
+TITLE_SHORT_LENGTH = 100
 
 
 @dataclass
@@ -343,9 +342,9 @@ def collect_low_tier_table(
     mid tier (pass the arxiv_ids from `collect_report_papers` and
     `collect_mid_tier_papers` as `exclude_ids`) as (published_date, short
     title, score) rows, sorted by score descending (ties by published_date
-    descending) so a capped table always shows the most relevant papers
-    first. Returns (rows capped at TRIAGE_TABLE_MAX_ROWS, total count before
-    capping) so the caller can show a "+N more" note."""
+    descending). Returns (rows, total count) -- uncapped, so the two are
+    always equal; total count is kept in the signature for compatibility
+    with callers/the template."""
     rows: list[TriagedPaperRow] = []
     for record in papers_records:
         arxiv_id = str(record.get("arxiv_id", ""))
@@ -369,9 +368,8 @@ def collect_low_tier_table(
             )
         )
 
-    total_count = len(rows)
     rows.sort(key=lambda r: (r.score, r.published_date), reverse=True)
-    return rows[:TRIAGE_TABLE_MAX_ROWS], total_count
+    return rows, len(rows)
 
 
 def render_report(

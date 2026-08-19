@@ -12,7 +12,7 @@
           <tr>
             <td style="padding:28px 32px; background-color:#1f2937; color:#ffffff;">
               <div style="font-size:20px; font-weight:bold;">{{ report_title }}</div>
-              <div style="font-size:13px; color:#c7ccd6; margin-top:4px;">{{ count }} relevant paper{{ "s" if count != 1 else "" }} found</div>
+              <div style="font-size:13px; color:#c7ccd6; margin-top:4px;">{{ window_start }} &ndash; {{ window_end }} &middot; {{ count }} relevant paper{{ "s" if count != 1 else "" }} found</div>
             </td>
           </tr>
           {% if papers|length == 0 %}
