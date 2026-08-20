@@ -14,7 +14,10 @@ regular daily runs.
 
 Use --dry-run first for anything beyond a narrow window: deep-reading is a
 real per-paper Opus cost, and a broad query over a wide date range can
-easily turn up hundreds of papers.
+easily turn up hundreds of papers. --dry-run prints a rough $ cost
+projection for the would-be deep-read phase (based on the live historical
+average deep-read cost sheet-wide), alongside the real triage/mid-summary
+cost it actually spent getting there.
 """
 
 from __future__ import annotations
@@ -59,7 +62,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Ingest + triage + mid-summary only; print a score breakdown and stop before deep-read/email",
+        help=(
+            "Ingest + triage + mid-summary only; print a score breakdown, a rough $ cost "
+            "projection for deep-read, and stop before deep-read/email"
+        ),
     )
     return parser.parse_args(argv)
 
@@ -133,7 +139,36 @@ def main(argv: list[str] | None = None) -> int:
         "would be deep-read on a full run." if args.dry_run else "will be deep-read now.",
     )
 
+    deep_read_records_all = sheets_store.get_all_records(deep_reads_ws)
+    costs_so_far = reporting.compute_cost_summary(papers_records, deep_read_records_all, args.start_date, args.end_date)
+    spent_so_far = costs_so_far.triage_cost_usd + costs_so_far.mid_summary_cost_usd + costs_so_far.deep_read_cost_usd
+    logger.info("Actual cost so far (this range): $%.4f", spent_so_far)
+
     if args.dry_run:
+        # Papers scoring at/above threshold that don't already have a
+        # deep-read from an earlier partial run over an overlapping range
+        # -- avoids double-projecting cost that's already been spent.
+        still_pending = at_or_above - costs_so_far.deep_read_count
+        avg_deep_read = reporting.compute_avg_deep_read_cost(deep_read_records_all)
+        if still_pending > 0 and avg_deep_read is not None:
+            avg_cost, n_history = avg_deep_read
+            projected = still_pending * avg_cost
+            logger.info(
+                "Projected deep-read cost: %d paper(s) still pending x $%.4f "
+                "(avg over %d historical deep-read(s) sheet-wide) = $%.2f",
+                still_pending,
+                avg_cost,
+                n_history,
+                projected,
+            )
+            logger.info("Projected total if you proceed: ~$%.2f", spent_so_far + projected)
+        elif still_pending > 0:
+            logger.info(
+                "%d paper(s) still pending deep-read, but there's no historical deep-read cost "
+                "data yet to project from. Opus deep-read typically runs roughly $0.25-0.40/paper "
+                "as a rough starting estimate.",
+                still_pending,
+            )
         logger.info("Dry run complete -- no deep-read or email performed.")
         return 0
 

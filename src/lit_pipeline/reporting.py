@@ -342,6 +342,24 @@ def compute_cost_summary(
     )
 
 
+def compute_avg_deep_read_cost(deep_read_records: list[dict]) -> tuple[float, int] | None:
+    """Average `deep_read_cost_usd` across every `deep_reads` row
+    sheet-wide -- deliberately not scoped to any date range, since this is
+    used to project the cost of papers that haven't been deep-read yet
+    (there's no in-range data to average for those). Self-corrects over
+    time as more papers get processed under current settings (e.g. the
+    PDF-trimming cut) -- not a hardcoded constant. Returns
+    (avg_cost, sample_size), or None if there's no historical data yet."""
+    costs = [
+        _safe_float(r.get("deep_read_cost_usd"))
+        for r in deep_read_records
+        if str(r.get("deep_read_cost_usd", "")).strip()
+    ]
+    if not costs:
+        return None
+    return sum(costs) / len(costs), len(costs)
+
+
 def compute_score_histogram(papers_records: list[dict], start: date, end: date) -> dict[int, int]:
     """Counts triaged papers by score (0-10), zero-filled, over the window.
     Used by backfill.py's --dry-run console output."""
