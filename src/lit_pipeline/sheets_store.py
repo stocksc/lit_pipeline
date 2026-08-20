@@ -1,14 +1,22 @@
-"""Thin wrapper around gspread for the two-tab papers/deep_reads sheet.
+"""Thin wrapper around gspread for the single `papers` sheet.
 
 Auth uses a Google Cloud *service account* -- a "robot" Google identity you
 create once and share your Sheet with (Editor access), so headless code
 (GitHub Actions) can read/write without an interactive browser login. See
 README.md for one-time setup steps.
 
-The `papers` tab's `status` column is the pipeline's only checkpoint: a run
-can be interrupted at any point and simply re-run, because every stage reads
+The `status` column is the pipeline's only checkpoint: a run can be
+interrupted at any point and simply re-run, because every stage reads
 `status` to figure out what's already done vs. still pending. See
 `load_papers_index()` and the status constants below.
+
+Everything lives in one tab -- triage, mid-summary, and deep-read results
+are all just columns on the same `papers` row, keyed by `arxiv_id`. This
+used to be two tabs (`papers` + a separate `deep_reads`), joined by
+`arxiv_id` everywhere a report needed both; that join added complexity for
+no real benefit, since a paper's deep-read result is 1:1 with its papers
+row anyway. Consolidated into one tab so there's exactly one row per paper,
+one place to look, and no cross-tab joins anywhere in the codebase.
 """
 
 from __future__ import annotations
@@ -25,8 +33,6 @@ from google.oauth2.service_account import Credentials
 
 from lit_pipeline.arxiv_client import PaperCandidate
 from lit_pipeline.config import GoogleSheetsSettings
-from lit_pipeline.pricing import LLMUsage
-from lit_pipeline.schemas import DeepReadResult
 
 logger = logging.getLogger(__name__)
 
@@ -45,16 +51,15 @@ PAPERS_HEADERS = [
     # `triage_score` itself gets overwritten with Opus's re-rating after a
     # deep-read, so this is the only place the original guess survives.
     "original_triage_score",
-]
-
-DEEP_READS_HEADERS = [
-    "arxiv_id", "summary", "relevance", "limitations", "author_affiliations",
-    "deep_read_input_tokens", "deep_read_output_tokens", "deep_read_cost_usd",
-    "deep_read_at",
-    # Opus's own re-rating of the paper, based on the full text rather than
-    # just the abstract. This is also copied onto `papers.triage_score` so
-    # report tiering always reflects the best-known score.
-    "score",
+    # Deep-read result columns (formerly a separate `deep_reads` tab,
+    # joined by arxiv_id). `deep_read_*` prefix distinguishes these from
+    # the `mid_summary` cheap-path columns above. No separate `score`
+    # column -- Opus's re-rating is written straight into `triage_score`
+    # (see pipeline_stages.run_deep_read_stage), so a duplicate here would
+    # just be redundant.
+    "deep_read_summary", "deep_read_relevance", "deep_read_limitations",
+    "deep_read_author_affiliations", "deep_read_input_tokens",
+    "deep_read_output_tokens", "deep_read_cost_usd", "deep_read_at",
 ]
 
 # --- status lifecycle -------------------------------------------------
@@ -115,12 +120,10 @@ def _get_or_create_worksheet(
     return ws
 
 
-def open_sheets(settings: GoogleSheetsSettings) -> tuple[gspread.Worksheet, gspread.Worksheet]:
+def open_sheets(settings: GoogleSheetsSettings) -> gspread.Worksheet:
     client = get_client()
     spreadsheet = client.open_by_key(settings.sheet_id)
-    papers_ws = _get_or_create_worksheet(spreadsheet, settings.papers_tab, PAPERS_HEADERS)
-    deep_reads_ws = _get_or_create_worksheet(spreadsheet, settings.deep_reads_tab, DEEP_READS_HEADERS)
-    return papers_ws, deep_reads_ws
+    return _get_or_create_worksheet(spreadsheet, settings.papers_tab, PAPERS_HEADERS)
 
 
 def get_all_records(ws: gspread.Worksheet) -> list[dict]:
@@ -224,21 +227,3 @@ def flush_cell_updates(papers_ws: gspread.Worksheet, batched: list[dict]) -> Non
         return
     papers_ws.batch_update(batched, value_input_option="RAW")
     batched.clear()
-
-
-def append_deep_read(
-    deep_reads_ws: gspread.Worksheet, arxiv_id: str, result: DeepReadResult, usage: LLMUsage
-) -> None:
-    row = [
-        arxiv_id,
-        result.summary,
-        " | ".join(result.relevance),
-        " | ".join(result.limitations),
-        " | ".join(result.author_affiliations),
-        usage.input_tokens,
-        usage.output_tokens,
-        round(usage.cost_usd, 6),
-        now_iso(),
-        result.score,
-    ]
-    deep_reads_ws.append_row(row, value_input_option="RAW")

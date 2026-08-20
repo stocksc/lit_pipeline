@@ -32,29 +32,26 @@ logger = logging.getLogger(__name__)
 def main() -> int:
     load_dotenv()
     settings = load_settings()
-    papers_ws, deep_reads_ws = sheets_store.open_sheets(settings.google_sheets)
+    papers_ws = sheets_store.open_sheets(settings.google_sheets)
     papers_records = sheets_store.get_all_records(papers_ws)
-    deep_read_records = sheets_store.get_all_records(deep_reads_ws)
 
     window_end = datetime.now(timezone.utc).date()
     window_start = window_end - timedelta(days=settings.weekly_report.lookback_days)
 
     papers = reporting.collect_report_papers(
         papers_records,
-        deep_read_records,
         window_start,
         window_end,
         score_threshold=settings.triage.score_threshold,
     )
     mid_tier_papers = reporting.collect_mid_tier_papers(
         papers_records,
-        deep_read_records,
         window_start,
         window_end,
         mid_summary_threshold=settings.triage.mid_summary_threshold,
         score_threshold=settings.triage.score_threshold,
     )
-    costs = reporting.compute_cost_summary(papers_records, deep_read_records, window_start, window_end)
+    costs = reporting.compute_cost_summary(papers_records, window_start, window_end)
     shown_ids = {p.arxiv_id for p in papers} | {p.arxiv_id for p in mid_tier_papers}
     triage_rows, triage_total = reporting.collect_low_tier_table(papers_records, shown_ids, window_start, window_end)
     logger.info(

@@ -32,7 +32,7 @@ def main() -> int:
     load_dotenv()
     settings = load_settings()
     anthropic_client = Anthropic()
-    papers_ws, deep_reads_ws = sheets_store.open_sheets(settings.google_sheets)
+    papers_ws = sheets_store.open_sheets(settings.google_sheets)
 
     logger.info("Fetching arXiv candidates...")
     candidates = fetch_candidates(settings.arxiv)
@@ -46,7 +46,7 @@ def main() -> int:
 
     run_triage_stage(anthropic_client, settings, papers_ws, index)
     run_mid_summary_stage(anthropic_client, settings, papers_ws, index)
-    run_deep_read_stage(anthropic_client, settings, papers_ws, deep_reads_ws, index)
+    run_deep_read_stage(anthropic_client, settings, papers_ws, index)
 
     logger.info("Daily pipeline complete.")
     return 0

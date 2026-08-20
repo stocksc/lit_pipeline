@@ -184,7 +184,6 @@ def run_deep_read_stage(
     client: Anthropic,
     settings: Settings,
     papers_ws: Worksheet,
-    deep_reads_ws: Worksheet,
     index: dict[str, PaperRow],
 ) -> None:
     to_deep_read = [
@@ -224,7 +223,6 @@ def run_deep_read_stage(
             )
             continue
 
-        sheets_store.append_deep_read(deep_reads_ws, row.arxiv_id, result, usage)
         sheets_store.flush_cell_updates(
             papers_ws,
             sheets_store.build_cell_updates(
@@ -232,6 +230,14 @@ def run_deep_read_stage(
                 {
                     "status": sheets_store.STATUS_DEEP_READ_COMPLETE,
                     "triage_score": result.score,
+                    "deep_read_summary": result.summary,
+                    "deep_read_relevance": " | ".join(result.relevance),
+                    "deep_read_limitations": " | ".join(result.limitations),
+                    "deep_read_author_affiliations": " | ".join(result.author_affiliations),
+                    "deep_read_input_tokens": usage.input_tokens,
+                    "deep_read_output_tokens": usage.output_tokens,
+                    "deep_read_cost_usd": round(usage.cost_usd, 6),
+                    "deep_read_at": sheets_store.now_iso(),
                     "last_error": "",
                 },
             ),

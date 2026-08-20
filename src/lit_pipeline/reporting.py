@@ -20,8 +20,11 @@ Both callers scope by *when the paper was originally published on arXiv*
 that keeps a manual backfill's papers confined to the historical window it
 was run for, instead of leaking into whatever regular weekly digest
 happens to run afterward just because that's when they were evaluated.
-`deep_reads` rows don't carry `published_date` themselves, so anything
-keyed off a `deep_reads` row joins back to the `papers` row for it.
+
+Everything here operates on a single `papers_records` list (one dict per
+sheet row) -- triage, mid-summary, and deep-read results all live as
+columns on the same row (see sheets_store.py), so there's no cross-tab
+join anywhere in this module.
 
 All date comparisons are date-only (no time-of-day), which is a deliberate
 simplification -- irrelevant at once-daily cadence, and both callers' date
@@ -34,14 +37,11 @@ historical sweep before committing to deep-read cost).
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
-
-logger = logging.getLogger(__name__)
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
@@ -152,49 +152,46 @@ def _short_title(title: str) -> str:
 
 def collect_report_papers(
     papers_records: list[dict],
-    deep_read_records: list[dict],
     start: date,
     end: date,
     score_threshold: int,
 ) -> list[ReportPaper]:
-    papers_by_id = {str(r["arxiv_id"]): r for r in papers_records if r.get("arxiv_id")}
-
     report_papers: list[ReportPaper] = []
-    for record in deep_read_records:
-        arxiv_id = str(record.get("arxiv_id", ""))
-        paper = papers_by_id.get(arxiv_id)
-        if paper is None:
-            logger.warning("deep_reads row %s has no matching papers row; skipping", arxiv_id)
+    for record in papers_records:
+        summary = str(record.get("deep_read_summary", "")).strip()
+        if not summary:
             continue
 
         # `triage_score` is Opus's re-rating as of the deep-read (see
         # pipeline_stages.run_deep_read_stage), not the original Haiku
         # triage score -- a paper re-rated below threshold no longer
-        # qualifies for the high tier, even though its deep_reads row
-        # still exists. It falls to collect_mid_tier_papers/
-        # collect_low_tier_table instead.
-        if _safe_int(paper.get("triage_score")) < score_threshold:
+        # qualifies for the high tier, even though it has a deep-read
+        # result. It falls to collect_mid_tier_papers/collect_low_tier_table
+        # instead.
+        if _safe_int(record.get("triage_score")) < score_threshold:
             continue
 
-        paper_date = parse_date(str(paper.get("published_date", "")))
+        paper_date = parse_date(str(record.get("published_date", "")))
         if not _in_range(paper_date, start, end):
             continue
 
-        relevance = [s.strip() for s in str(record.get("relevance", "")).split("|") if s.strip()]
-        limitations = [s.strip() for s in str(record.get("limitations", "")).split("|") if s.strip()]
-        affiliations = [s.strip() for s in str(record.get("author_affiliations", "")).split("|") if s.strip()]
-        authors = str(paper.get("authors", ""))
+        relevance = [s.strip() for s in str(record.get("deep_read_relevance", "")).split("|") if s.strip()]
+        limitations = [s.strip() for s in str(record.get("deep_read_limitations", "")).split("|") if s.strip()]
+        affiliations = [
+            s.strip() for s in str(record.get("deep_read_author_affiliations", "")).split("|") if s.strip()
+        ]
+        authors = str(record.get("authors", ""))
         authors_display = f"{authors} ({', '.join(affiliations)})" if affiliations else authors
 
         report_papers.append(
             ReportPaper(
-                arxiv_id=arxiv_id,
-                title=str(paper.get("title", "")),
+                arxiv_id=str(record.get("arxiv_id", "")),
+                title=str(record.get("title", "")),
                 authors_display=authors_display,
-                link=str(paper.get("link", "")),
-                published_date=str(paper.get("published_date", "")),
-                triage_score=_safe_int(paper.get("triage_score")),
-                summary=str(record.get("summary", "")),
+                link=str(record.get("link", "")),
+                published_date=str(record.get("published_date", "")),
+                triage_score=_safe_int(record.get("triage_score")),
+                summary=summary,
                 relevance=relevance,
                 limitations=limitations,
             )
@@ -206,76 +203,54 @@ def collect_report_papers(
 
 def collect_mid_tier_papers(
     papers_records: list[dict],
-    deep_read_records: list[dict],
     start: date,
     end: date,
     mid_summary_threshold: int,
     score_threshold: int,
 ) -> list[MidTierPaper]:
-    """Two sources feed this tier:
+    """Two sources feed this tier, both just different columns on the same
+    `papers` row:
 
-    1. The cheap path: papers with a completed mid-tier summary (a
-       non-empty `mid_summary`), scored via Haiku from the abstract alone --
-       no authors/affiliations, since this path skips the PDF fetch
-       entirely.
+    1. The cheap path: a non-empty `mid_summary`, generated by Haiku from
+       the abstract alone -- no authors/affiliations, since this path
+       skips the PDF fetch entirely.
     2. The downgraded-deep-read path: a paper that got a full Opus
-       deep-read, but whose re-rated `triage_score` (see
-       pipeline_stages.run_deep_read_stage) landed in the mid band instead
-       of the high band. These reuse `deep_reads.summary` as-is rather than
-       requesting a second, shorter summary.
+       deep-read (`deep_read_summary` non-empty), but whose re-rated
+       `triage_score` (see pipeline_stages.run_deep_read_stage) landed in
+       the mid band instead of the high band. Reuses `deep_read_summary`
+       as-is rather than requesting a second, shorter summary.
 
     Band-exclusivity in routing means a given paper should only ever match
-    one of the two sources, but arxiv_id is used to dedup defensively
-    anyway.
+    one of the two, but the deep-read summary is preferred if somehow both
+    are present.
     """
     results: list[MidTierPaper] = []
-    seen_ids: set[str] = set()
 
     for record in papers_records:
-        summary = str(record.get("mid_summary", "")).strip()
+        score = _safe_int(record.get("triage_score"))
+        if not (mid_summary_threshold <= score < score_threshold):
+            continue
+
+        deep_read_summary = str(record.get("deep_read_summary", "")).strip()
+        mid_summary = str(record.get("mid_summary", "")).strip()
+        summary = deep_read_summary or mid_summary
         if not summary:
             continue
+
         paper_date = parse_date(str(record.get("published_date", "")))
         if not _in_range(paper_date, start, end):
             continue
-        arxiv_id = str(record.get("arxiv_id", ""))
+
         results.append(
             MidTierPaper(
-                arxiv_id=arxiv_id,
+                arxiv_id=str(record.get("arxiv_id", "")),
                 title=str(record.get("title", "")),
                 link=str(record.get("link", "")),
                 published_date=str(record.get("published_date", "")),
-                triage_score=_safe_int(record.get("triage_score")),
+                triage_score=score,
                 summary=summary,
             )
         )
-        seen_ids.add(arxiv_id)
-
-    papers_by_id = {str(r["arxiv_id"]): r for r in papers_records if r.get("arxiv_id")}
-    for record in deep_read_records:
-        arxiv_id = str(record.get("arxiv_id", ""))
-        if arxiv_id in seen_ids:
-            continue
-        paper = papers_by_id.get(arxiv_id)
-        if paper is None:
-            continue
-        score = _safe_int(paper.get("triage_score"))
-        if not (mid_summary_threshold <= score < score_threshold):
-            continue
-        paper_date = parse_date(str(paper.get("published_date", "")))
-        if not _in_range(paper_date, start, end):
-            continue
-        results.append(
-            MidTierPaper(
-                arxiv_id=arxiv_id,
-                title=str(paper.get("title", "")),
-                link=str(paper.get("link", "")),
-                published_date=str(paper.get("published_date", "")),
-                triage_score=score,
-                summary=str(record.get("summary", "")),
-            )
-        )
-        seen_ids.add(arxiv_id)
 
     results.sort(key=lambda p: p.triage_score, reverse=True)
     return results
@@ -283,7 +258,6 @@ def collect_mid_tier_papers(
 
 def compute_cost_summary(
     papers_records: list[dict],
-    deep_read_records: list[dict],
     start: date,
     end: date,
 ) -> CostSummary:
@@ -296,35 +270,30 @@ def compute_cost_summary(
     triage_cost = 0.0
     mid_summary_count = mid_summary_input = mid_summary_output = 0
     mid_summary_cost = 0.0
+    deep_read_count = deep_input = deep_output = 0
+    deep_cost = 0.0
     for record in papers_records:
         paper_date = parse_date(str(record.get("published_date", "")))
         in_window = _in_range(paper_date, start, end)
+        if not in_window:
+            continue
 
-        if in_window:
-            triage_count += 1
-            triage_input += _safe_int(record.get("triage_input_tokens"))
-            triage_output += _safe_int(record.get("triage_output_tokens"))
-            triage_cost += _safe_float(record.get("triage_cost_usd"))
+        triage_count += 1
+        triage_input += _safe_int(record.get("triage_input_tokens"))
+        triage_output += _safe_int(record.get("triage_output_tokens"))
+        triage_cost += _safe_float(record.get("triage_cost_usd"))
 
-        if in_window and str(record.get("mid_summary", "")).strip():
+        if str(record.get("mid_summary", "")).strip():
             mid_summary_count += 1
             mid_summary_input += _safe_int(record.get("mid_summary_input_tokens"))
             mid_summary_output += _safe_int(record.get("mid_summary_output_tokens"))
             mid_summary_cost += _safe_float(record.get("mid_summary_cost_usd"))
 
-    papers_by_id = {str(r["arxiv_id"]): r for r in papers_records if r.get("arxiv_id")}
-    deep_read_count = deep_input = deep_output = 0
-    deep_cost = 0.0
-    for record in deep_read_records:
-        arxiv_id = str(record.get("arxiv_id", ""))
-        paper = papers_by_id.get(arxiv_id)
-        paper_date = parse_date(str(paper.get("published_date", ""))) if paper else None
-        if not _in_range(paper_date, start, end):
-            continue
-        deep_read_count += 1
-        deep_input += _safe_int(record.get("deep_read_input_tokens"))
-        deep_output += _safe_int(record.get("deep_read_output_tokens"))
-        deep_cost += _safe_float(record.get("deep_read_cost_usd"))
+        if str(record.get("deep_read_summary", "")).strip():
+            deep_read_count += 1
+            deep_input += _safe_int(record.get("deep_read_input_tokens"))
+            deep_output += _safe_int(record.get("deep_read_output_tokens"))
+            deep_cost += _safe_float(record.get("deep_read_cost_usd"))
 
     return CostSummary(
         triage_count=triage_count,
@@ -342,8 +311,8 @@ def compute_cost_summary(
     )
 
 
-def compute_avg_deep_read_cost(deep_read_records: list[dict]) -> tuple[float, int] | None:
-    """Average `deep_read_cost_usd` across every `deep_reads` row
+def compute_avg_deep_read_cost(papers_records: list[dict]) -> tuple[float, int] | None:
+    """Average `deep_read_cost_usd` across every deep-read paper
     sheet-wide -- deliberately not scoped to any date range, since this is
     used to project the cost of papers that haven't been deep-read yet
     (there's no in-range data to average for those). Self-corrects over
@@ -352,8 +321,8 @@ def compute_avg_deep_read_cost(deep_read_records: list[dict]) -> tuple[float, in
     (avg_cost, sample_size), or None if there's no historical data yet."""
     costs = [
         _safe_float(r.get("deep_read_cost_usd"))
-        for r in deep_read_records
-        if str(r.get("deep_read_cost_usd", "")).strip()
+        for r in papers_records
+        if str(r.get("deep_read_summary", "")).strip()
     ]
     if not costs:
         return None

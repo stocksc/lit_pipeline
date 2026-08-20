@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
         settings.triage.score_threshold = args.threshold
 
     client = Anthropic()
-    papers_ws, deep_reads_ws = sheets_store.open_sheets(settings.google_sheets)
+    papers_ws = sheets_store.open_sheets(settings.google_sheets)
 
     logger.info("Searching arXiv %s to %s...", args.start_date, args.end_date)
     candidates = fetch_candidates(settings.arxiv, published_after=args.start_date, published_before=args.end_date)
@@ -139,8 +139,7 @@ def main(argv: list[str] | None = None) -> int:
         "would be deep-read on a full run." if args.dry_run else "will be deep-read now.",
     )
 
-    deep_read_records_all = sheets_store.get_all_records(deep_reads_ws)
-    costs_so_far = reporting.compute_cost_summary(papers_records, deep_read_records_all, args.start_date, args.end_date)
+    costs_so_far = reporting.compute_cost_summary(papers_records, args.start_date, args.end_date)
     spent_so_far = costs_so_far.triage_cost_usd + costs_so_far.mid_summary_cost_usd + costs_so_far.deep_read_cost_usd
     logger.info("Actual cost so far (this range): $%.4f", spent_so_far)
 
@@ -149,7 +148,9 @@ def main(argv: list[str] | None = None) -> int:
         # deep-read from an earlier partial run over an overlapping range
         # -- avoids double-projecting cost that's already been spent.
         still_pending = at_or_above - costs_so_far.deep_read_count
-        avg_deep_read = reporting.compute_avg_deep_read_cost(deep_read_records_all)
+        # Sheet-wide (not date-range-scoped) average -- there's no in-range
+        # deep-read data yet for papers still pending, that's the point.
+        avg_deep_read = reporting.compute_avg_deep_read_cost(sheets_store.get_all_records(papers_ws))
         if still_pending > 0 and avg_deep_read is not None:
             avg_cost, n_history = avg_deep_read
             projected = still_pending * avg_cost
@@ -172,26 +173,23 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("Dry run complete -- no deep-read or email performed.")
         return 0
 
-    run_deep_read_stage(client, settings, papers_ws, deep_reads_ws, scoped_index)
+    run_deep_read_stage(client, settings, papers_ws, scoped_index)
 
     papers_records = sheets_store.get_all_records(papers_ws)
-    deep_read_records = sheets_store.get_all_records(deep_reads_ws)
     report_papers = reporting.collect_report_papers(
         papers_records,
-        deep_read_records,
         args.start_date,
         args.end_date,
         score_threshold=settings.triage.score_threshold,
     )
     mid_tier_papers = reporting.collect_mid_tier_papers(
         papers_records,
-        deep_read_records,
         args.start_date,
         args.end_date,
         mid_summary_threshold=settings.triage.mid_summary_threshold,
         score_threshold=settings.triage.score_threshold,
     )
-    costs = reporting.compute_cost_summary(papers_records, deep_read_records, args.start_date, args.end_date)
+    costs = reporting.compute_cost_summary(papers_records, args.start_date, args.end_date)
     shown_ids = {p.arxiv_id for p in report_papers} | {p.arxiv_id for p in mid_tier_papers}
     triage_rows, triage_total = reporting.collect_low_tier_table(papers_records, shown_ids, args.start_date, args.end_date)
 

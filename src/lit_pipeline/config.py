@@ -44,7 +44,6 @@ class DeepReadSettings(BaseModel):
 class GoogleSheetsSettings(BaseModel):
     sheet_id: str
     papers_tab: str = "papers"
-    deep_reads_tab: str = "deep_reads"
 
 
 class WeeklyReportSettings(BaseModel):

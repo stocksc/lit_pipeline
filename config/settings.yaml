@@ -74,7 +74,6 @@ google_sheets:
   # https://docs.google.com/spreadsheets/d/THIS_PART_HERE/edit
   sheet_id: "15BV2YSCyF3ITNu3omHxPx53VjB5tsvxXqheTJXlFtek"
   papers_tab: "papers"
-  deep_reads_tab: "deep_reads"
 
 weekly_report:
   lookback_days: 7
