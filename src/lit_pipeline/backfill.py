@@ -192,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     costs = reporting.compute_cost_summary(papers_records, args.start_date, args.end_date)
     shown_ids = {p.arxiv_id for p in report_papers} | {p.arxiv_id for p in mid_tier_papers}
     triage_rows, triage_total = reporting.collect_low_tier_table(papers_records, shown_ids, args.start_date, args.end_date)
+    keyword_hits = reporting.compute_keyword_hit_counts(papers_records, args.start_date, args.end_date, settings.arxiv.queries)
 
     # report_title (no date -- shown in the email body) and subject (keeps
     # the date -- shown in the mail client's subject line) deliberately
@@ -203,6 +204,7 @@ def main(argv: list[str] | None = None) -> int:
         costs=costs,
         triage_rows=triage_rows,
         triage_total=triage_total,
+        keyword_hits=keyword_hits,
         window_start=args.start_date,
         window_end=args.end_date,
     )

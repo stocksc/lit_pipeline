@@ -12,7 +12,7 @@
           <tr>
             <td style="padding:28px 32px; background-color:#1f2937; color:#ffffff;">
               <div style="font-size:20px; font-weight:bold;">{{ report_title }}</div>
-              <div style="font-size:13px; color:#c7ccd6; margin-top:4px;">{{ window_start }} &ndash; {{ window_end }} &middot; {{ count }} relevant paper{{ "s" if count != 1 else "" }} found</div>
+              <div style="font-size:13px; color:#c7ccd6; margin-top:4px;">{{ window_start }} &ndash; {{ window_end }}</div>
             </td>
           </tr>
           {% if papers|length == 0 %}
@@ -80,20 +80,22 @@
               <div style="font-size:13px; font-weight:bold; color:#374151; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:10px;">
                 Other Papers Reviewed ({{ triage_total }})
               </div>
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px; color:#4b5563;">
-                <tr style="font-weight:bold; color:#374151;">
-                  <td style="padding:2px 8px 4px 0; width:44px;">Score</td>
-                  <td style="padding:2px 8px 4px 0;">Paper</td>
-                  <td style="padding:2px 0 4px 0; white-space:nowrap;">Date</td>
-                </tr>
-                {% for row in triage_rows %}
-                <tr>
-                  <td style="padding:2px 8px 2px 0; font-variant-numeric:tabular-nums;">{{ row.score }}</td>
-                  <td style="padding:2px 8px 2px 0;"><a href="{{ row.link }}" style="color:#1a1a1a;">{{ row.title_short }}</a></td>
-                  <td style="padding:2px 0; white-space:nowrap;">{{ row.published_date }}</td>
-                </tr>
-                {% endfor %}
-              </table>
+              <div style="max-height:320px; overflow-y:auto;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px; color:#4b5563;">
+                  <tr style="font-weight:bold; color:#374151;">
+                    <td style="padding:2px 8px 4px 0; width:44px;">Score</td>
+                    <td style="padding:2px 8px 4px 0;">Paper</td>
+                    <td style="padding:2px 0 4px 0; white-space:nowrap;">Date</td>
+                  </tr>
+                  {% for row in triage_rows %}
+                  <tr>
+                    <td style="padding:2px 8px 2px 0; font-variant-numeric:tabular-nums;">{{ row.score }}</td>
+                    <td style="padding:2px 8px 2px 0;"><a href="{{ row.link }}" style="color:#1a1a1a;">{{ row.title_short }}</a></td>
+                    <td style="padding:2px 0; white-space:nowrap;">{{ row.published_date }}</td>
+                  </tr>
+                  {% endfor %}
+                </table>
+              </div>
               {% if triage_total > triage_rows|length %}
               <div style="font-size:12px; color:#9ca3af; margin-top:8px; font-style:italic;">
                 + {{ triage_total - triage_rows|length }} more not shown
@@ -102,7 +104,7 @@
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 32px; background-color:#f9fafb;">
+            <td style="padding:20px 32px; background-color:#f9fafb; border-bottom:1px solid #e5e7eb;">
               <div style="font-size:13px; font-weight:bold; color:#374151; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:10px;">
                 Cost this window (estimated)
               </div>
@@ -130,6 +132,23 @@
               </table>
             </td>
           </tr>
+          {% if keyword_hits %}
+          <tr>
+            <td style="padding:20px 32px; background-color:#f9fafb;">
+              <div style="font-size:13px; font-weight:bold; color:#374151; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:10px;">
+                Keyword hits this window
+              </div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px; color:#4b5563;">
+                {% for term, hits in keyword_hits %}
+                <tr>
+                  <td style="padding:3px 0;">{{ term }}</td>
+                  <td style="padding:3px 0; text-align:right; font-variant-numeric:tabular-nums;">{{ hits }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+          {% endif %}
           <tr>
             <td style="padding:18px 32px; font-size:11px; color:#9ca3af;">
               Generated automatically by your literature tracker.

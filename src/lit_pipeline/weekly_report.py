@@ -54,6 +54,7 @@ def main() -> int:
     costs = reporting.compute_cost_summary(papers_records, window_start, window_end)
     shown_ids = {p.arxiv_id for p in papers} | {p.arxiv_id for p in mid_tier_papers}
     triage_rows, triage_total = reporting.collect_low_tier_table(papers_records, shown_ids, window_start, window_end)
+    keyword_hits = reporting.compute_keyword_hit_counts(papers_records, window_start, window_end, settings.arxiv.queries)
     logger.info(
         "Weekly report covers %d full paper(s), %d mid-tier; estimated cost $%.4f "
         "(triage $%.4f, mid-summary $%.4f, deep-read $%.4f)",
@@ -75,6 +76,7 @@ def main() -> int:
         costs=costs,
         triage_rows=triage_rows,
         triage_total=triage_total,
+        keyword_hits=keyword_hits,
         window_start=window_start,
         window_end=window_end,
     )

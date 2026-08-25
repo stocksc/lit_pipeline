@@ -43,6 +43,8 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from lit_pipeline.arxiv_client import extract_abs_terms, matches_literally
+
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
 TITLE_SHORT_LENGTH = 100
@@ -329,6 +331,32 @@ def compute_avg_deep_read_cost(papers_records: list[dict]) -> tuple[float, int] 
     return sum(costs) / len(costs), len(costs)
 
 
+def compute_keyword_hit_counts(
+    papers_records: list[dict],
+    start: date,
+    end: date,
+    queries: list[str],
+) -> list[tuple[str, int]]:
+    """Counts how many papers triaged in the window literally mention each
+    configured abs: search term in their abstract -- same word-boundary
+    match arxiv_client.py uses to filter arXiv's stemmed search results, so
+    the counts here reflect what actually drove a match, not arXiv's looser
+    stemmed search. A paper matching multiple terms counts toward each one.
+    Reads straight off the abstract text already stored per row -- no new
+    arXiv calls. Sorted alphabetically by term."""
+    terms = [t for q in queries for t in extract_abs_terms(q)]
+    counts = {t: 0 for t in terms}
+    for record in papers_records:
+        paper_date = parse_date(str(record.get("published_date", "")))
+        if not _in_range(paper_date, start, end):
+            continue
+        abstract = str(record.get("abstract", ""))
+        for term in terms:
+            if matches_literally(term, abstract):
+                counts[term] += 1
+    return sorted(counts.items(), key=lambda kv: kv[0].lower())
+
+
 def compute_score_histogram(papers_records: list[dict], start: date, end: date) -> dict[int, int]:
     """Counts triaged papers by score (0-10), zero-filled, over the window.
     Used by backfill.py's --dry-run console output."""
@@ -390,6 +418,7 @@ def render_report(
     costs: CostSummary,
     triage_rows: list[TriagedPaperRow],
     triage_total: int,
+    keyword_hits: list[tuple[str, int]],
     window_start: date,
     window_end: date,
 ) -> tuple[str, str]:
@@ -409,12 +438,12 @@ def render_report(
         costs=costs,
         triage_rows=triage_rows,
         triage_total=triage_total,
+        keyword_hits=keyword_hits,
         window_start=window_start,
         window_end=window_end,
-        count=len(papers),
     )
 
-    lines = [report_title, f"{len(papers)} relevant paper{'s' if len(papers) != 1 else ''} found", ""]
+    lines = [report_title, ""]
     for p in papers:
         lines.append(f"[{p.triage_score}/10] {p.title}")
         lines.append(f"  {p.published_date}")
@@ -461,5 +490,12 @@ def render_report(
         f"${costs.deep_read_cost_usd:.4f}"
     )
     lines.append(f"Total:       ${costs.total_cost_usd:.4f}")
+
+    if keyword_hits:
+        lines.append("")
+        lines.append("--- Keyword hits this window ---")
+        for term, hits in keyword_hits:
+            lines.append(f"  {term}: {hits}")
+
     text = "\n".join(lines)
     return html, text

@@ -31,12 +31,13 @@ logger = logging.getLogger(__name__)
 _ABS_TERM_RE = re.compile(r'abs:"([^"]+)"')
 
 
-def _extract_abs_terms(query: str) -> list[str]:
+def extract_abs_terms(query: str) -> list[str]:
     return _ABS_TERM_RE.findall(query)
 
 
-def _matches_literally(term: str, abstract: str) -> bool:
+def matches_literally(term: str, abstract: str) -> bool:
     return re.search(r"\b" + re.escape(term) + r"\b", abstract, re.IGNORECASE) is not None
+
 
 # Be a polite client when hitting the PDF servers directly, same spirit as
 # the courtesy delay `arxiv.Client` applies to the search API.
@@ -117,7 +118,7 @@ def fetch_candidates(
         # a bare `q1 OR q2 AND submittedDate:[...]` would bind incorrectly,
         # scoping the date range to only the last OR'd term.
         full_query = f"({query}) AND {date_clause}" if date_clause else query
-        terms = _extract_abs_terms(query)
+        terms = extract_abs_terms(query)
         search = arxiv.Search(
             query=full_query,
             max_results=max_results,
@@ -137,7 +138,7 @@ def fetch_candidates(
             if arxiv_id in seen or result.pdf_url is None:
                 continue
             abstract = result.summary.strip().replace("\n", " ")
-            if terms and not any(_matches_literally(t, abstract) for t in terms):
+            if terms and not any(matches_literally(t, abstract) for t in terms):
                 continue
             seen[arxiv_id] = PaperCandidate(
                 arxiv_id=arxiv_id,
