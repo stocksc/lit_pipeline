@@ -28,15 +28,34 @@ logger = logging.getLogger(__name__)
 # far broader than the literal word/phrase in settings.yaml. To keep that
 # stemmed search for recall but restore the precision of an exact match, we
 # re-check each result's abstract for the literal term afterwards.
-_ABS_TERM_RE = re.compile(r'abs:"([^"]+)"')
-
-
-def extract_abs_terms(query: str) -> list[str]:
-    return _ABS_TERM_RE.findall(query)
+#
+# A single broad word (e.g. "fairness", "credit") is still too noisy even
+# with exact matching -- these are common words with unrelated meanings in
+# other fields (physics' "state discrimination", "credit" in finance
+# generally, etc.). Requiring BROAD_KEYWORD_MIN_HITS of settings.arxiv's
+# `broad_keywords` to co-occur in the same abstract restores precision
+# without needing a human to hand-curate an ever-growing exact-phrase list.
+BROAD_KEYWORD_MIN_HITS = 2
 
 
 def matches_literally(term: str, abstract: str) -> bool:
     return re.search(r"\b" + re.escape(term) + r"\b", abstract, re.IGNORECASE) is not None
+
+
+def build_abs_query(specific_keywords: list[str], broad_keywords: list[str]) -> str:
+    """Combines both keyword lists into one arXiv abs: OR query. Casts a
+    wider net than the eventual match (arXiv doesn't understand "2 of
+    these 4" co-occurrence), so every result still gets client-side
+    filtered by `passes_keyword_filter` before being kept."""
+    terms = specific_keywords + broad_keywords
+    return " OR ".join(f'abs:"{t}"' for t in terms)
+
+
+def passes_keyword_filter(abstract: str, specific_keywords: list[str], broad_keywords: list[str]) -> bool:
+    if any(matches_literally(t, abstract) for t in specific_keywords):
+        return True
+    broad_hits = sum(1 for t in broad_keywords if matches_literally(t, abstract))
+    return broad_hits >= BROAD_KEYWORD_MIN_HITS
 
 
 # Be a polite client when hitting the PDF servers directly, same spirit as
@@ -79,19 +98,24 @@ def fetch_candidates(
     published_after: date | None = None,
     published_before: date | None = None,
 ) -> list[PaperCandidate]:
-    """Run every configured query and return distinct candidates.
+    """Search arXiv for `specific_keywords`/`broad_keywords` and return
+    distinct candidates that pass `passes_keyword_filter`.
 
-    With no date bounds (the daily job's call site), behaves exactly as
-    before: a trailing window of `max_age_days` from now, filtered
-    client-side.
+    The arXiv-side query ORs every keyword from both lists together --
+    deliberately wider than the eventual match, since arXiv has no way to
+    express "2 of these 4 broad keywords co-occur." That co-occurrence
+    check happens client-side per result below.
+
+    With no date bounds (the daily job's call site), behaves as a trailing
+    window of `max_age_days` from now, filtered client-side.
 
     With either bound given (backfill's call site), pushes an explicit
-    `submittedDate:[...]` range into each query so arXiv filters
+    `submittedDate:[...]` range into the query so arXiv filters
     server-side, with `max_results=None`. This is required, not just an
     optimization: `arxiv.Search` sorts newest-first and caps results
     server-side *before* any client-side filtering, so a small
     `max_results` would never even surface months-old papers once more
-    than `max_results` newer papers exist for that query.
+    than `max_results` newer papers exist for the query.
     """
     client = arxiv.Client(page_size=100, delay_seconds=3.0, num_retries=3)
 
@@ -112,47 +136,50 @@ def fetch_candidates(
         before_dt = None
         max_results = settings.max_results_per_query
 
-    seen: dict[str, PaperCandidate] = {}
-    for query in settings.queries:
-        # Parenthesize the configured query before ANDing in the date clause --
-        # a bare `q1 OR q2 AND submittedDate:[...]` would bind incorrectly,
-        # scoping the date range to only the last OR'd term.
-        full_query = f"({query}) AND {date_clause}" if date_clause else query
-        terms = extract_abs_terms(query)
-        search = arxiv.Search(
-            query=full_query,
-            max_results=max_results,
-            sort_by=arxiv.SortCriterion.SubmittedDate,
-            sort_order=arxiv.SortOrder.Descending,
-        )
-        count_for_query = 0
-        for result in client.results(search):
-            if before_dt is not None and result.published > before_dt:
-                # A stray too-new result doesn't mean everything scanned
-                # after it is also out of range -- keep going.
-                continue
-            if result.published < after_dt:
-                # Descending sort: nothing further in this query can match either.
-                break
-            arxiv_id = _strip_version(result.entry_id)
-            if arxiv_id in seen or result.pdf_url is None:
-                continue
-            abstract = result.summary.strip().replace("\n", " ")
-            if terms and not any(matches_literally(t, abstract) for t in terms):
-                continue
-            seen[arxiv_id] = PaperCandidate(
-                arxiv_id=arxiv_id,
-                title=result.title.strip().replace("\n", " "),
-                authors=", ".join(a.name for a in result.authors),
-                published_date=result.published.date().isoformat(),
-                abstract=abstract,
-                link=result.entry_id,
-                pdf_url=result.pdf_url,
-            )
-            count_for_query += 1
-        logger.info("Query %r matched %d new candidate(s)", full_query, count_for_query)
+    # Parenthesize the keyword query before ANDing in the date clause -- a
+    # bare `q1 OR q2 AND submittedDate:[...]` would bind incorrectly,
+    # scoping the date range to only the last OR'd term.
+    keyword_query = build_abs_query(settings.specific_keywords, settings.broad_keywords)
+    full_query = f"({keyword_query}) AND {date_clause}" if date_clause else keyword_query
+    search = arxiv.Search(
+        query=full_query,
+        max_results=max_results,
+        sort_by=arxiv.SortCriterion.SubmittedDate,
+        sort_order=arxiv.SortOrder.Descending,
+    )
 
-    logger.info("Fetched %d distinct candidates across %d queries", len(seen), len(settings.queries))
+    seen: dict[str, PaperCandidate] = {}
+    matched_raw = 0
+    for result in client.results(search):
+        if before_dt is not None and result.published > before_dt:
+            # A stray too-new result doesn't mean everything scanned
+            # after it is also out of range -- keep going.
+            continue
+        if result.published < after_dt:
+            # Descending sort: nothing further in this query can match either.
+            break
+        matched_raw += 1
+        arxiv_id = _strip_version(result.entry_id)
+        if arxiv_id in seen or result.pdf_url is None:
+            continue
+        abstract = result.summary.strip().replace("\n", " ")
+        if not passes_keyword_filter(abstract, settings.specific_keywords, settings.broad_keywords):
+            continue
+        seen[arxiv_id] = PaperCandidate(
+            arxiv_id=arxiv_id,
+            title=result.title.strip().replace("\n", " "),
+            authors=", ".join(a.name for a in result.authors),
+            published_date=result.published.date().isoformat(),
+            abstract=abstract,
+            link=result.entry_id,
+            pdf_url=result.pdf_url,
+        )
+
+    logger.info(
+        "arXiv matched %d raw result(s); %d passed the keyword filter",
+        matched_raw,
+        len(seen),
+    )
     return list(seen.values())
 
 

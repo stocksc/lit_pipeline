@@ -50,9 +50,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--query",
         action="append",
-        dest="queries",
-        metavar="QUERY",
-        help="Override config/settings.yaml's arxiv.queries for this run only; repeatable",
+        dest="specific_keywords",
+        metavar="KEYWORD",
+        help="Override config/settings.yaml's arxiv.specific_keywords for this run only; repeatable",
     )
     parser.add_argument(
         "--threshold",
@@ -100,8 +100,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--end-date must not be before --start-date")
 
     settings = load_settings()
-    if args.queries:
-        settings.arxiv.queries = args.queries
+    if args.specific_keywords:
+        settings.arxiv.specific_keywords = args.specific_keywords
     if args.threshold is not None:
         settings.triage.score_threshold = args.threshold
 
@@ -192,7 +192,9 @@ def main(argv: list[str] | None = None) -> int:
     costs = reporting.compute_cost_summary(papers_records, args.start_date, args.end_date)
     shown_ids = {p.arxiv_id for p in report_papers} | {p.arxiv_id for p in mid_tier_papers}
     triage_rows, triage_total = reporting.collect_low_tier_table(papers_records, shown_ids, args.start_date, args.end_date)
-    keyword_hits = reporting.compute_keyword_hit_counts(papers_records, args.start_date, args.end_date, settings.arxiv.queries)
+    keyword_hits = reporting.compute_keyword_hit_counts(
+        papers_records, args.start_date, args.end_date, settings.arxiv.specific_keywords, settings.arxiv.broad_keywords
+    )
 
     # report_title (no date -- shown in the email body) and subject (keeps
     # the date -- shown in the mail client's subject line) deliberately

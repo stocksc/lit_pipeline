@@ -60,6 +60,13 @@ PAPERS_HEADERS = [
     "deep_read_summary", "deep_read_relevance", "deep_read_limitations",
     "deep_read_author_affiliations", "deep_read_input_tokens",
     "deep_read_output_tokens", "deep_read_cost_usd", "deep_read_at",
+    # One sentence on what drove Opus's score -- generated on every
+    # deep-read regardless of outcome (Opus never sees the original triage
+    # score, so it can't know in advance whether it's about to produce a
+    # "downgrade"). reporting.py decides whether to surface it, based on
+    # whether original_triage_score/triage_score actually crossed the
+    # deep-read threshold in opposite directions.
+    "deep_read_score_rationale",
 ]
 
 # --- status lifecycle -------------------------------------------------

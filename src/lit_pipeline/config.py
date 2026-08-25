@@ -15,7 +15,13 @@ DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "settings.yaml"
 
 
 class ArxivSettings(BaseModel):
-    queries: list[str]
+    # Any ONE of these phrases in a paper's abstract is enough to include it.
+    specific_keywords: list[str]
+    # These are individually too broad/overloaded to trust alone (e.g. plain
+    # "discrimination" is common physics/stats vocabulary) -- a paper only
+    # qualifies via this list if at least BROAD_KEYWORD_MIN_HITS of them
+    # (see arxiv_client.py) appear together in the same abstract.
+    broad_keywords: list[str]
     max_results_per_query: int = 50
     max_age_days: int = 7
 

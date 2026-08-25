@@ -205,7 +205,17 @@ def run_deep_read_stage(
         try:
             pdf_bytes = download_pdf_bytes(candidate.pdf_url)
             pdf_text = pdf_extract.extract_pdf_text(pdf_bytes, max_pages=settings.deep_read.max_pdf_pages)
-            result, usage = deep_read_paper(client, settings.deep_read, settings.interests, candidate, pdf_text)
+            # row.triage_score is still Haiku's untouched original here -- this
+            # call's own result is what overwrites it, below, once we have it.
+            result, usage = deep_read_paper(
+                client,
+                settings.deep_read,
+                settings.interests,
+                candidate,
+                pdf_text,
+                triage_score=row.triage_score or 0,
+                triage_rationale=str(row.raw.get("triage_rationale", "")),
+            )
         except Exception as exc:  # isolate any failure (download, extraction, API) to this one paper
             logger.warning("Deep read failed for %s: %s", row.arxiv_id, exc)
             next_retry = row.retry_count + 1
@@ -234,6 +244,7 @@ def run_deep_read_stage(
                     "deep_read_relevance": " | ".join(result.relevance),
                     "deep_read_limitations": " | ".join(result.limitations),
                     "deep_read_author_affiliations": " | ".join(result.author_affiliations),
+                    "deep_read_score_rationale": result.score_rationale,
                     "deep_read_input_tokens": usage.input_tokens,
                     "deep_read_output_tokens": usage.output_tokens,
                     "deep_read_cost_usd": round(usage.cost_usd, 6),

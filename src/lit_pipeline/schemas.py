@@ -73,3 +73,11 @@ class DeepReadResult(BaseModel):
             "page or in footnotes). Empty list if none can be determined from the text."
         )
     )
+    score_rationale: str = Field(
+        description=(
+            "One sentence on how your score compares to the initial triage score you "
+            "were given. If yours is lower, say specifically what in the full text made "
+            "this less relevant than the abstract-only read suggested. If it's the same "
+            "or higher, briefly note what confirmed or strengthened that assessment."
+        )
+    )

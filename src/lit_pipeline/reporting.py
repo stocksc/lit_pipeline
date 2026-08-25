@@ -43,7 +43,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from lit_pipeline.arxiv_client import extract_abs_terms, matches_literally
+from lit_pipeline.arxiv_client import matches_literally
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
@@ -58,6 +58,7 @@ class ReportPaper:
     link: str
     published_date: str
     triage_score: int
+    original_triage_score: int
     summary: str
     relevance: list[str]
     limitations: list[str]
@@ -70,7 +71,11 @@ class MidTierPaper:
     link: str
     published_date: str
     triage_score: int
+    original_triage_score: int
     summary: str
+    # Only ever populated for the downgraded-deep-read source (Opus always
+    # writes one, but a cheap-path mid_summary row never has one to read).
+    score_rationale: str
 
 
 @dataclass
@@ -135,6 +140,16 @@ def _safe_int(value: object) -> int:
         return 0
 
 
+def _original_score_or(record: dict, current_score: int) -> int:
+    """original_triage_score is blank for any row triaged before that column
+    existed. Falling back to 0 there (like _safe_int does) would read as a
+    fake "downgrade from 0" against a real current score -- fall back to
+    current_score instead, so a genuinely-missing original reads as
+    unchanged rather than as a 0/10 rating that was never actually given."""
+    raw = str(record.get("original_triage_score", "")).strip()
+    return int(raw) if raw.isdigit() else current_score
+
+
 def _safe_float(value: object) -> float:
     try:
         return float(value)  # type: ignore[arg-type]
@@ -193,6 +208,7 @@ def collect_report_papers(
                 link=str(record.get("link", "")),
                 published_date=str(record.get("published_date", "")),
                 triage_score=_safe_int(record.get("triage_score")),
+                original_triage_score=_original_score_or(record, _safe_int(record.get("triage_score"))),
                 summary=summary,
                 relevance=relevance,
                 limitations=limitations,
@@ -250,7 +266,9 @@ def collect_mid_tier_papers(
                 link=str(record.get("link", "")),
                 published_date=str(record.get("published_date", "")),
                 triage_score=score,
+                original_triage_score=_original_score_or(record, score),
                 summary=summary,
+                score_rationale=str(record.get("deep_read_score_rationale", "")).strip(),
             )
         )
 
@@ -335,16 +353,18 @@ def compute_keyword_hit_counts(
     papers_records: list[dict],
     start: date,
     end: date,
-    queries: list[str],
+    specific_keywords: list[str],
+    broad_keywords: list[str],
 ) -> list[tuple[str, int]]:
     """Counts how many papers triaged in the window literally mention each
-    configured abs: search term in their abstract -- same word-boundary
-    match arxiv_client.py uses to filter arXiv's stemmed search results, so
-    the counts here reflect what actually drove a match, not arXiv's looser
-    stemmed search. A paper matching multiple terms counts toward each one.
-    Reads straight off the abstract text already stored per row -- no new
-    arXiv calls. Sorted alphabetically by term."""
-    terms = [t for q in queries for t in extract_abs_terms(q)]
+    configured keyword (both specific_keywords and broad_keywords) in their
+    abstract -- same word-boundary match arxiv_client.py uses to filter
+    arXiv's stemmed search results, so the counts here reflect what
+    actually drove a match, not arXiv's looser stemmed search. A paper
+    matching multiple terms counts toward each one. Reads straight off the
+    abstract text already stored per row -- no new arXiv calls. Sorted
+    alphabetically by term."""
+    terms = specific_keywords + broad_keywords
     counts = {t: 0 for t in terms}
     for record in papers_records:
         paper_date = parse_date(str(record.get("published_date", "")))
@@ -445,7 +465,12 @@ def render_report(
 
     lines = [report_title, ""]
     for p in papers:
-        lines.append(f"[{p.triage_score}/10] {p.title}")
+        score_label = (
+            f"{p.triage_score}/10 (originally {p.original_triage_score}/10)"
+            if p.original_triage_score != p.triage_score
+            else f"{p.triage_score}/10"
+        )
+        lines.append(f"[{score_label}] {p.title}")
         lines.append(f"  {p.published_date}")
         lines.append(f"  {p.authors_display}")
         lines.append(f"  {p.link}")
@@ -459,10 +484,17 @@ def render_report(
     if mid_tier_papers:
         lines.append(f"--- Potentially Relevant ({len(mid_tier_papers)}) ---")
         for p in mid_tier_papers:
-            lines.append(f"[{p.triage_score}/10] {p.title}")
+            score_label = (
+                f"{p.triage_score}/10 (originally {p.original_triage_score}/10)"
+                if p.original_triage_score != p.triage_score
+                else f"{p.triage_score}/10"
+            )
+            lines.append(f"[{score_label}] {p.title}")
             lines.append(f"  {p.published_date}")
             lines.append(f"  {p.link}")
             lines.append(f"  {p.summary}")
+            if p.original_triage_score != p.triage_score and p.score_rationale:
+                lines.append(f"  Why the rating dropped: {p.score_rationale}")
             lines.append("")
 
     lines.append(f"--- Other Papers Reviewed ({triage_total}) ---")

@@ -133,9 +133,12 @@ GitHub Actions, which has no browser).
 Edit `config/settings.yaml`:
 - `interests`: free text describing what's relevant to you. This goes
   verbatim into both the triage and deep-read prompts.
-- `arxiv.queries`: arXiv search-syntax strings (field prefixes `au:`, `abs:`,
-  `ti:`, `cat:`, combinable with `AND`/`OR`). See the
-  [arXiv API query manual](https://arxiv.org/help/api/user-manual#query_details).
+- `arxiv.specific_keywords`: plain phrases (no query syntax needed) -- any ONE
+  appearing in a paper's abstract is enough to include it.
+- `arxiv.broad_keywords`: plain single words that are individually too
+  overloaded to trust alone (e.g. "discrimination" is common physics/stats
+  vocabulary) -- a paper only qualifies via this list if at least 2 of them
+  co-occur in the same abstract.
 - `triage.score_threshold`: 0-10 cutoff for moving a paper to deep-read.
 
 ### 5. Local `.env` for testing before you push to GitHub
@@ -214,7 +217,7 @@ uv run lit-backfill --start-date 2024-01-01 --end-date 2024-01-31
 
 Flags:
 - `--start-date` / `--end-date` (required, `YYYY-MM-DD`, both inclusive)
-- `--query "..."` -- override `arxiv.queries` from settings.yaml for this run only (repeatable); omit to use your standing daily queries
+- `--query "..."` -- override `arxiv.specific_keywords` from settings.yaml for this run only (repeatable); omit to use your standing keyword lists
 - `--threshold N` -- override `triage.score_threshold` for this run only (e.g. `--threshold 8` for "just the 8-and-ups")
 - `--dry-run` -- stop after triage/mid-summary; no deep-read, no email
 
