@@ -40,9 +40,10 @@ arxiv:
   # pulling their weight.
   queries:
     - >-
+      abs:"fairness" OR
       abs:"less discriminatory alternative" OR abs:"LDA search" OR
-      abs:"fair lending" OR abs:"algorithmic fairness" OR abs:"AI fairness"
-      OR abs:"algorithmic debiasing" OR abs:"equal credit opportunity act"
+      abs:"fair lending" OR abs:"algorithmic fairness" OR 
+      abs:"algorithmic debiasing" OR abs:"equal credit opportunity act"
       OR abs:"fair housing act" OR abs:"proxy discrimination" OR
       abs:"credit discrimination" OR abs:"Bayesian Improved Surname
       Geocoding" OR abs:"Home Mortgage Disclosure Act" OR

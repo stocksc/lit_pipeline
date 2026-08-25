@@ -11,6 +11,7 @@ Note: as of arxiv==4.0.1, `Result` no longer has a `download_pdf()` helper
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -21,6 +22,21 @@ import httpx
 from lit_pipeline.config import ArxivSettings
 
 logger = logging.getLogger(__name__)
+
+# arXiv's abs: search stems terms before matching (e.g. abs:"fairness" also
+# matches "fair", "fairly", "unfair" -- anything sharing that root), which is
+# far broader than the literal word/phrase in settings.yaml. To keep that
+# stemmed search for recall but restore the precision of an exact match, we
+# re-check each result's abstract for the literal term afterwards.
+_ABS_TERM_RE = re.compile(r'abs:"([^"]+)"')
+
+
+def _extract_abs_terms(query: str) -> list[str]:
+    return _ABS_TERM_RE.findall(query)
+
+
+def _matches_literally(term: str, abstract: str) -> bool:
+    return re.search(r"\b" + re.escape(term) + r"\b", abstract, re.IGNORECASE) is not None
 
 # Be a polite client when hitting the PDF servers directly, same spirit as
 # the courtesy delay `arxiv.Client` applies to the search API.
@@ -101,6 +117,7 @@ def fetch_candidates(
         # a bare `q1 OR q2 AND submittedDate:[...]` would bind incorrectly,
         # scoping the date range to only the last OR'd term.
         full_query = f"({query}) AND {date_clause}" if date_clause else query
+        terms = _extract_abs_terms(query)
         search = arxiv.Search(
             query=full_query,
             max_results=max_results,
@@ -119,12 +136,15 @@ def fetch_candidates(
             arxiv_id = _strip_version(result.entry_id)
             if arxiv_id in seen or result.pdf_url is None:
                 continue
+            abstract = result.summary.strip().replace("\n", " ")
+            if terms and not any(_matches_literally(t, abstract) for t in terms):
+                continue
             seen[arxiv_id] = PaperCandidate(
                 arxiv_id=arxiv_id,
                 title=result.title.strip().replace("\n", " "),
                 authors=", ".join(a.name for a in result.authors),
                 published_date=result.published.date().isoformat(),
-                abstract=result.summary.strip().replace("\n", " "),
+                abstract=abstract,
                 link=result.entry_id,
                 pdf_url=result.pdf_url,
             )
