@@ -36,5 +36,7 @@ def send_email(*, sender: str, recipient: str, subject: str, html: str, text: st
         },
         timeout=30.0,
     )
+    if response.is_error:
+        logger.error("Resend API error %d: %s", response.status_code, response.text)
     response.raise_for_status()
     logger.info("Sent email to %s (id=%s)", recipient, response.json().get("id"))
