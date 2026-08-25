@@ -355,26 +355,33 @@ def compute_keyword_hit_counts(
     end: date,
     specific_keywords: list[str],
     broad_keywords: list[str],
-) -> list[tuple[str, int]]:
+) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
     """Counts how many papers triaged in the window literally mention each
-    configured keyword (both specific_keywords and broad_keywords) in their
-    abstract -- same word-boundary match arxiv_client.py uses to filter
-    arXiv's stemmed search results, so the counts here reflect what
-    actually drove a match, not arXiv's looser stemmed search. A paper
-    matching multiple terms counts toward each one. Reads straight off the
-    abstract text already stored per row -- no new arXiv calls. Sorted
-    alphabetically by term."""
-    terms = specific_keywords + broad_keywords
-    counts = {t: 0 for t in terms}
+    configured keyword in their abstract -- same word-boundary match
+    arxiv_client.py uses to filter arXiv's stemmed search results, so the
+    counts here reflect what actually drove a match, not arXiv's looser
+    stemmed search. A paper matching multiple terms counts toward each one.
+    Reads straight off the abstract text already stored per row -- no new
+    arXiv calls. Returns (specific_hits, broad_hits), each sorted
+    alphabetically by term -- kept separate since they're different
+    matching rules (specific: any one qualifies; broad: needs 2+ to
+    co-occur), not just two halves of one list."""
+    specific_counts = {t: 0 for t in specific_keywords}
+    broad_counts = {t: 0 for t in broad_keywords}
     for record in papers_records:
         paper_date = parse_date(str(record.get("published_date", "")))
         if not _in_range(paper_date, start, end):
             continue
         abstract = str(record.get("abstract", ""))
-        for term in terms:
+        for term in specific_keywords:
             if matches_literally(term, abstract):
-                counts[term] += 1
-    return sorted(counts.items(), key=lambda kv: kv[0].lower())
+                specific_counts[term] += 1
+        for term in broad_keywords:
+            if matches_literally(term, abstract):
+                broad_counts[term] += 1
+    specific_hits = sorted(specific_counts.items(), key=lambda kv: kv[0].lower())
+    broad_hits = sorted(broad_counts.items(), key=lambda kv: kv[0].lower())
+    return specific_hits, broad_hits
 
 
 def compute_score_histogram(papers_records: list[dict], start: date, end: date) -> dict[int, int]:
@@ -438,7 +445,8 @@ def render_report(
     costs: CostSummary,
     triage_rows: list[TriagedPaperRow],
     triage_total: int,
-    keyword_hits: list[tuple[str, int]],
+    specific_keyword_hits: list[tuple[str, int]],
+    broad_keyword_hits: list[tuple[str, int]],
     window_start: date,
     window_end: date,
 ) -> tuple[str, str]:
@@ -458,7 +466,8 @@ def render_report(
         costs=costs,
         triage_rows=triage_rows,
         triage_total=triage_total,
-        keyword_hits=keyword_hits,
+        specific_keyword_hits=specific_keyword_hits,
+        broad_keyword_hits=broad_keyword_hits,
         window_start=window_start,
         window_end=window_end,
     )
@@ -523,10 +532,16 @@ def render_report(
     )
     lines.append(f"Total:       ${costs.total_cost_usd:.4f}")
 
-    if keyword_hits:
+    if specific_keyword_hits:
         lines.append("")
-        lines.append("--- Keyword hits this window ---")
-        for term, hits in keyword_hits:
+        lines.append("--- Exact Keywords ---")
+        for term, hits in specific_keyword_hits:
+            lines.append(f"  {term}: {hits}")
+
+    if broad_keyword_hits:
+        lines.append("")
+        lines.append("--- Broad Keywords (2+ Matches Needed) ---")
+        for term, hits in broad_keyword_hits:
             lines.append(f"  {term}: {hits}")
 
     text = "\n".join(lines)

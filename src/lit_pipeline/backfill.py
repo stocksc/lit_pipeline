@@ -192,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     costs = reporting.compute_cost_summary(papers_records, args.start_date, args.end_date)
     shown_ids = {p.arxiv_id for p in report_papers} | {p.arxiv_id for p in mid_tier_papers}
     triage_rows, triage_total = reporting.collect_low_tier_table(papers_records, shown_ids, args.start_date, args.end_date)
-    keyword_hits = reporting.compute_keyword_hit_counts(
+    specific_keyword_hits, broad_keyword_hits = reporting.compute_keyword_hit_counts(
         papers_records, args.start_date, args.end_date, settings.arxiv.specific_keywords, settings.arxiv.broad_keywords
     )
 
@@ -206,7 +206,8 @@ def main(argv: list[str] | None = None) -> int:
         costs=costs,
         triage_rows=triage_rows,
         triage_total=triage_total,
-        keyword_hits=keyword_hits,
+        specific_keyword_hits=specific_keyword_hits,
+        broad_keyword_hits=broad_keyword_hits,
         window_start=args.start_date,
         window_end=args.end_date,
     )
