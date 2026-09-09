@@ -73,6 +73,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def _scope_to_published_range(index: dict[str, PaperRow], start: date, end: date) -> dict[str, PaperRow]:
     scoped: dict[str, PaperRow] = {}
     for arxiv_id, row in index.items():
+        # An off-query paper a manual deep dive added isn't something this
+        # sweep would ever have found, so it stays out of the working set and
+        # therefore out of the histogram, the costs, and the report --
+        # matching what reporting.exclude_manual_only does for the digest.
+        if str(row.raw.get("manual_only", "")).strip():
+            continue
         published = reporting.parse_date(str(row.raw.get("published_date", "")))
         if published is not None and start <= published <= end:
             scoped[arxiv_id] = row
@@ -175,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
 
     run_deep_read_stage(client, settings, papers_ws, scoped_index)
 
-    papers_records = sheets_store.get_all_records(papers_ws)
+    papers_records = reporting.exclude_manual_only(sheets_store.get_all_records(papers_ws))
     report_papers = reporting.collect_report_papers(
         papers_records,
         args.start_date,

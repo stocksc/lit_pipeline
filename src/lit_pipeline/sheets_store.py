@@ -67,7 +67,19 @@ PAPERS_HEADERS = [
     # whether original_triage_score/triage_score actually crossed the
     # deep-read threshold in opposite directions.
     "deep_read_score_rationale",
+    # Set only on rows a manual deep dive (manual_deep_dive.py) added that
+    # the standing keyword lists would never have surfaced. Those papers are
+    # in the sheet purely because someone asked for them by id, so the
+    # scheduled weekly digest and backfill reports leave them out --
+    # see reporting.exclude_manual_only. A manually dived paper that DOES
+    # match the keywords is left unflagged, because the daily job would have
+    # picked it up and reported it anyway.
+    "manual_only",
 ]
+
+# What gets written into the `manual_only` column. Any non-empty value counts
+# as flagged on read, so this is just for legibility in the sheet itself.
+MANUAL_ONLY_VALUE = "yes"
 
 # --- status lifecycle -------------------------------------------------
 # A triaged row's score routes it to exactly one of two further stages:
@@ -122,8 +134,28 @@ def _get_or_create_worksheet(
         ws = spreadsheet.add_worksheet(title=title, rows=1000, cols=len(headers))
         ws.append_row(headers)
         return ws
-    if not ws.row_values(1):
+    existing = ws.row_values(1)
+    if not existing:
         ws.append_row(headers)
+    elif len(existing) < len(headers):
+        # PAPERS_HEADERS only ever grows at the end (see its comment), so an
+        # older sheet just needs the new trailing names filled in. This isn't
+        # cosmetic: `get_all_records` pairs each row's values with the header
+        # row positionally, so a value written past the last header is
+        # silently invisible to every read afterwards.
+        if ws.col_count < len(headers):
+            # The grid has to be widened before anything can be written into
+            # the new columns -- unlike rows (which `append_rows` grows on
+            # demand), writing past the last column is a hard 400 from the
+            # Sheets API ("Range ... exceeds grid limits"), not an expansion.
+            ws.add_cols(len(headers) - ws.col_count)
+        ws.update([headers[len(existing):]], f"{_col_letter(len(existing) + 1)}1")
+        logger.info(
+            "Added %d new trailing column(s) to %r: %s",
+            len(headers) - len(existing),
+            title,
+            ", ".join(headers[len(existing):]),
+        )
     return ws
 
 
@@ -187,7 +219,15 @@ def load_papers_index(papers_ws: gspread.Worksheet) -> dict[str, PaperRow]:
     return index
 
 
-def append_new_candidates(papers_ws: gspread.Worksheet, candidates: list[PaperCandidate]) -> None:
+def append_new_candidates(
+    papers_ws: gspread.Worksheet,
+    candidates: list[PaperCandidate],
+    manual_only: bool = False,
+) -> None:
+    """Append papers the sheet has never seen. `manual_only=True` flags the
+    whole batch as papers the standing keyword lists would never have
+    surfaced, keeping them out of the scheduled reports (see the
+    `manual_only` header comment above)."""
     if not candidates:
         return
     now = now_iso()
@@ -204,6 +244,7 @@ def append_new_candidates(papers_ws: gspread.Worksheet, candidates: list[PaperCa
             status=STATUS_INGESTED,
             ingested_at=now,
             retry_count=0,
+            manual_only=MANUAL_ONLY_VALUE if manual_only else "",
         )
         rows.append([row[h] for h in PAPERS_HEADERS])
     papers_ws.append_rows(rows, value_input_option="RAW")

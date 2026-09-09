@@ -1,13 +1,23 @@
-"""Triage and deep-read stages, shared by the daily cron job (daily_pipeline.py)
-and manual backfills (backfill.py).
+"""Triage and deep-read stages, shared by the daily cron job (daily_pipeline.py),
+manual backfills (backfill.py), and forced per-paper runs (manual_deep_dive.py).
 
-Both callers derive their working set entirely from the `index` argument
+Every caller derives its working set entirely from the `index` argument
 (a `dict[str, PaperRow]`, typically from `sheets_store.load_papers_index`,
 optionally pre-filtered by the caller -- e.g. backfill scopes it to a date
-range before calling these). `settings.retries.max_retry_count` and
+range, and manual_deep_dive to a hand-picked list of ids, before calling
+these). `settings.retries.max_retry_count` and
 `settings.triage.score_threshold` flow through whichever `Settings` instance
 the caller passes, so a backfill's in-memory threshold/query overrides apply
 automatically with no changes needed here.
+
+`force=True` on the triage and deep-read stages drops the status/score
+filtering those stages normally do and processes every row it was handed.
+That's manual_deep_dive.py's whole mechanism: a paper is triaged and
+deep-read even if it is already triaged or scored below `score_threshold`.
+Deciding *which* rows deserve that is entirely the caller's business --
+manual_deep_dive, for one, hands over only the papers with no existing
+deep-read to reuse. Nothing else about the stages changes -- the same
+writes, batching, and per-paper error isolation apply either way.
 """
 
 from __future__ import annotations
@@ -54,11 +64,15 @@ def run_triage_stage(
     settings: Settings,
     papers_ws: Worksheet,
     index: dict[str, PaperRow],
+    force: bool = False,
 ) -> None:
+    """Score every not-yet-triaged row's abstract, or -- with `force` -- every
+    row handed in, whatever state it is already in."""
     to_triage = [
         row
         for row in index.values()
-        if row.status == sheets_store.STATUS_INGESTED
+        if force
+        or row.status == sheets_store.STATUS_INGESTED
         or (
             row.status == sheets_store.STATUS_TRIAGE_ERROR
             and row.retry_count < settings.retries.max_retry_count
@@ -105,6 +119,12 @@ def run_triage_stage(
             )
             row.status = sheets_store.STATUS_TRIAGED
             row.triage_score = result.score
+            # run_deep_read_stage reads the rationale back off `row.raw`,
+            # which is a snapshot of the sheet from before this run started.
+            # Without this, any paper triaged and deep-read in the same run
+            # (every paper on a normal daily run, and every paper here) hands
+            # Opus a blank or stale rationale alongside a fresh score.
+            row.raw["triage_rationale"] = result.rationale
 
         if len(batched) >= TRIAGE_BATCH_SIZE:
             sheets_store.flush_cell_updates(papers_ws, batched)
@@ -185,11 +205,15 @@ def run_deep_read_stage(
     settings: Settings,
     papers_ws: Worksheet,
     index: dict[str, PaperRow],
+    force: bool = False,
 ) -> None:
+    """Deep-read every triaged row scoring at/above `score_threshold`, or --
+    with `force` -- every row handed in, whatever it scored."""
     to_deep_read = [
         row
         for row in index.values()
-        if (
+        if force
+        or (
             row.status == sheets_store.STATUS_TRIAGED
             and (row.triage_score or 0) >= settings.triage.score_threshold
         )

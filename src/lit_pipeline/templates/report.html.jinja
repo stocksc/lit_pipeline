@@ -15,6 +15,13 @@
               <div style="font-size:13px; color:#c7ccd6; margin-top:4px;">{{ window_start }} &ndash; {{ window_end }}</div>
             </td>
           </tr>
+          {% if attachment_note %}
+          <tr>
+            <td style="padding:14px 32px; background-color:#eef2ff; border-bottom:1px solid #e5e7eb;">
+              <div style="font-size:13px; color:#3730a3;">{{ attachment_note }}</div>
+            </td>
+          </tr>
+          {% endif %}
           {% if papers|length == 0 %}
           <tr>
             <td style="padding:32px;">
@@ -94,6 +101,7 @@
             </td>
           </tr>
           {% endif %}
+          {% if triage_total %}
           <tr>
             <td style="padding:20px 32px; background-color:#f9fafb; border-bottom:1px solid #e5e7eb;">
               <div style="font-size:13px; font-weight:bold; color:#374151; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:10px;">
@@ -122,6 +130,7 @@
               {% endif %}
             </td>
           </tr>
+          {% endif %}
           <tr>
             <td style="padding:20px 32px; background-color:#f9fafb; border-bottom:1px solid #e5e7eb;">
               <div style="font-size:13px; font-weight:bold; color:#374151; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:10px;">

@@ -62,6 +62,10 @@ class ReportPaper:
     summary: str
     relevance: list[str]
     limitations: list[str]
+    # Opus writes one on every deep-read. The email report only surfaces it in
+    # the mid tier (where a downgrade needs explaining), but the PDF cover
+    # page in pdf_bundle.py shows it whenever the score moved at all.
+    score_rationale: str
 
 
 @dataclass
@@ -167,6 +171,27 @@ def _short_title(title: str) -> str:
     return title[:TITLE_SHORT_LENGTH] + "..."
 
 
+def exclude_manual_only(papers_records: list[dict]) -> list[dict]:
+    """Drop rows a manual deep dive added that the standing keyword lists
+    would never have surfaced (the `manual_only` column -- see
+    sheets_store.py and manual_deep_dive.py).
+
+    Those papers are in the sheet only because someone asked for them by id,
+    so the scheduled weekly digest and backfill reports shouldn't carry them:
+    they were never part of what the pipeline was watching for, and their
+    ad-hoc Opus cost isn't part of what the pipeline spent on its own.
+
+    Deliberately *not* applied to a paper that matches the keyword lists,
+    even when a manual dive is what pulled it in early: the daily job would
+    have ingested and reported that one anyway, so hiding it would punch a
+    hole in the digest rather than keep the digest clean.
+
+    manual_deep_dive.py's own report never applies this -- those papers are
+    the entire point of that run.
+    """
+    return [r for r in papers_records if not str(r.get("manual_only", "")).strip()]
+
+
 def collect_report_papers(
     papers_records: list[dict],
     start: date,
@@ -212,6 +237,7 @@ def collect_report_papers(
                 summary=summary,
                 relevance=relevance,
                 limitations=limitations,
+                score_rationale=str(record.get("deep_read_score_rationale", "")).strip(),
             )
         )
 
@@ -438,6 +464,16 @@ def collect_low_tier_table(
     return rows, len(rows)
 
 
+def jinja_env() -> Environment:
+    """The Jinja environment both templates render through (pdf_bundle.py uses
+    it for the deep-dive cover page).
+
+    Escaping is unconditional rather than left to `select_autoescape`, whose
+    filename-based detection wouldn't match a ".html.jinja" double extension.
+    """
+    return Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
+
+
 def render_report(
     report_title: str,
     papers: list[ReportPaper],
@@ -449,16 +485,15 @@ def render_report(
     broad_keyword_hits: list[tuple[str, int]],
     window_start: date,
     window_end: date,
+    attachment_note: str = "",
 ) -> tuple[str, str]:
-    """Returns (html, text)."""
-    # This environment only ever renders one, always-HTML template, so escape
-    # unconditionally rather than relying on select_autoescape's filename-based
-    # detection (which wouldn't match the ".html.jinja" double extension).
-    env = Environment(
-        loader=FileSystemLoader(str(TEMPLATES_DIR)),
-        autoescape=True,
-    )
-    template = env.get_template("report.html.jinja")
+    """Returns (html, text).
+
+    `attachment_note`, when given, renders as a banner above the cards --
+    manual_deep_dive.py uses it to say which papers are attached to which
+    email once a run's PDFs are split across several (see email_resend.py).
+    """
+    template = jinja_env().get_template("report.html.jinja")
     html = template.render(
         report_title=report_title,
         papers=papers,
@@ -470,9 +505,12 @@ def render_report(
         broad_keyword_hits=broad_keyword_hits,
         window_start=window_start,
         window_end=window_end,
+        attachment_note=attachment_note,
     )
 
     lines = [report_title, ""]
+    if attachment_note:
+        lines += [attachment_note, ""]
     for p in papers:
         score_label = (
             f"{p.triage_score}/10 (originally {p.original_triage_score}/10)"
@@ -506,13 +544,16 @@ def render_report(
                 lines.append(f"  Why the rating dropped: {p.score_rationale}")
             lines.append("")
 
-    lines.append(f"--- Other Papers Reviewed ({triage_total}) ---")
-    for row in triage_rows:
-        lines.append(f"  [{row.score:>2}] {row.title_short}  {row.published_date}")
-        lines.append(f"    {row.link}")
-    if triage_total > len(triage_rows):
-        lines.append(f"  ... + {triage_total - len(triage_rows)} more not shown")
-    lines.append("")
+    # Skipped entirely when empty, matching the template -- a manual deep
+    # dive gives every paper a full card, leaving nothing for this tier.
+    if triage_total:
+        lines.append(f"--- Other Papers Reviewed ({triage_total}) ---")
+        for row in triage_rows:
+            lines.append(f"  [{row.score:>2}] {row.title_short}  {row.published_date}")
+            lines.append(f"    {row.link}")
+        if triage_total > len(triage_rows):
+            lines.append(f"  ... + {triage_total - len(triage_rows)} more not shown")
+        lines.append("")
 
     lines.append("--- Cost this window (estimated) ---")
     lines.append(

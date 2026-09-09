@@ -33,6 +33,10 @@ Retarget it to any topic by editing a few lines of free text.
 6. **Backfill on demand** — the same pipeline can be pointed at any past
    date range instead of "today," with a dry-run mode that prices out the
    expensive part *before* you commit to it.
+7. **Manual deep dive** — hand it a list of arXiv IDs and it force-runs
+   exactly those papers through triage *and* deep-read, whatever they
+   score and whether or not your keywords would ever have found them,
+   without those off-topic one-offs polluting your weekly digest.
 
 ```
 GitHub Actions (daily cron)
@@ -48,6 +52,8 @@ GitHub Actions (weekly cron)
 you, manually
   -> lit-backfill --start-date ... --end-date ... [--dry-run]
      -> same pipeline, scoped to a historical window instead of "today"
+  -> lit-deep-dive 2501.12345 2502.09876 [--dry-run]
+     -> same pipeline, scoped to papers you named -- deep-read regardless of score
 ```
 
 ## Cool features
@@ -227,6 +233,104 @@ easily turn up hundreds of papers. It's safe to re-run the same command
 repeatedly (including switching from `--dry-run` to a full run afterward):
 already-processed papers are skipped, same as the daily job.
 
+## Deep-diving specific papers
+
+`lit-deep-dive` is the manual override for the pipeline's own judgment. The
+daily job only deep-reads a paper if arXiv's keyword search surfaced it *and*
+Haiku scored it at/above your threshold; this forces named papers through
+triage and deep-read regardless of either. Useful when a colleague sends you
+something, when a paper you just read cites something worth a look, or when
+you simply disagree with the 3/10 the pipeline gave it.
+
+```bash
+# Cheap preview: ingest + triage only, then a $ projection for the
+# deep-read, based on your sheet's own historical averages.
+uv run lit-deep-dive 2501.12345 --dry-run
+
+# The real thing: deep-reads every ID given, whatever it scored, and
+# emails a "Manual Deep Dive" report covering just those papers.
+uv run lit-deep-dive 2501.12345 2502.09876
+
+# Write the results to the sheet without the email.
+uv run lit-deep-dive 2501.12345 --no-email
+
+# Re-read a paper you already have a deep-read for (e.g. after rewriting
+# your `interests`), instead of reusing the stored one.
+uv run lit-deep-dive 2501.12345 --refresh
+
+# Email the write-up and the paper together: one PDF per paper, deep read
+# on page 1, the paper itself appended after it.
+uv run lit-deep-dive 2501.12345 2502.09876 --attach-pdfs
+```
+
+IDs can be given however you happen to have them -- `2501.12345`,
+`2501.12345v2`, `arXiv:2501.12345`, a pasted `arxiv.org/abs/...` URL, or a
+pre-2007 style ID like `hep-th/9711200` -- and anything that isn't a
+recognizable arXiv ID is rejected up front, before a single paper is paid
+for. Papers your sheet has never seen are fetched by
+ID and added to it, with no keyword filter applied: you asked for these
+specifically, so it doesn't matter whether they'd have matched your standing
+queries.
+
+Flags:
+- `--dry-run` -- stop after triage; no deep-read, no email
+- `--no-email` -- deep-read and store as usual, just don't send the report
+- `--refresh` -- re-read papers that already have a deep-read, instead of reusing it
+- `--attach-pdfs` -- attach one PDF per paper: the deep-read write-up, then the paper
+
+Because every requested paper is deep-read regardless of score, the report
+gives all of them a full deep-dive card rather than sorting them into tiers,
+and skips the keyword-hit tables (nothing here was found by keyword).
+
+**A paper that already has a deep-read is reused, not re-read.** Asking for
+it again costs nothing and produces the same report card -- so it's safe to
+re-run a command, or to include an ID you've dived before alongside new ones,
+without paying twice. Such a paper isn't re-triaged either: `triage_score`
+holds Opus's post-deep-read re-rating, so a fresh abstract-only score would
+overwrite a better-informed one. `--refresh` opts into a genuine re-read when
+you want one -- worth it after you've rewritten your `interests`, or when a
+read came back poor. A paper whose deep-read *failed* has nothing to reuse,
+so it's simply retried.
+
+### Getting the papers themselves attached
+
+`--attach-pdfs` turns the report email into something you can read away from
+the sheet. Each paper becomes one PDF: the full deep-read write-up as page 1
+(title, authors and affiliations, score with the original triage score and
+Opus's reasoning for the change, summary, relevance, limitations), then the
+paper's own PDF appended after it. The email body stays the usual report, so
+you can still skim the cards and open only what you want. Attachments are
+named `2501.12345 - Paper Title.pdf`, so a folder of them sorts by ID and
+stays searchable.
+
+Resend caps an email at 40MB after encoding, which a few image-heavy papers
+can reach. Rather than truncating, the run splits across numbered emails
+(`[1/2]`, `[2/2]`); each one carries the full report body, so any single email
+still makes sense on its own when forwarded. A paper too large to fit in *any*
+email, or whose PDF can't be downloaded, is attached as the write-up alone and
+called out in the body -- the paper is still one click away via its link.
+
+Because a stored deep-read is reused rather than re-read, running this over
+IDs you've already dived costs nothing:
+
+```bash
+# Free: no LLM calls, just rebuilds and re-sends the bundles.
+uv run lit-deep-dive 2501.12345 2502.09876 --attach-pdfs
+```
+
+**These papers don't leak into your weekly digest.** Anything this command
+ingests that your keyword lists would never have matched is flagged
+`manual_only` in the sheet, and the weekly report and backfill reports skip
+flagged rows entirely -- including their cost, so an ad-hoc Opus read doesn't
+show up as pipeline spend. The flag is deliberately *not* set on a paper that
+does match your keywords: the daily job would have found and reported that
+one anyway, so hiding it would leave a hole in the digest rather than keep it
+clean. Same for a paper already in your sheet when you dive it -- it was
+already being tracked, so it keeps reporting as usual (with the deep-read you
+just paid for, which may move it up a tier). Papers older than the digest's
+lookback window can't appear either way, since every report scopes by arXiv
+publish date.
+
 ## Running in GitHub Actions
 
 `.github/workflows/daily.yml` and `weekly.yml` run on cron (UTC) and can
@@ -253,6 +357,7 @@ that happened to match your query) instead of sending it in full.
 Real per-paper cost still varies a lot, so don't assume a fixed rate.
 Every paper's exact token usage and cost is recorded per-row in the sheet
 (`triage_cost_usd`, `mid_summary_cost_usd`, `deep_read_cost_usd`), the
-weekly report summarizes cost for its window, and `lit-backfill --dry-run`
-projects the cost of a prospective run before you commit to it -- that's
-the most reliable way to know what something will actually cost.
+weekly report summarizes cost for its window, and the `--dry-run` mode of
+`lit-backfill`/`lit-deep-dive` projects the cost of a prospective run
+before you commit to it -- that's the most reliable way to know what
+something will actually cost.

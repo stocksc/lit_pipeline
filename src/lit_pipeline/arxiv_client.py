@@ -80,12 +80,60 @@ class PaperCandidate:
     pdf_url: str
 
 
+# The abs/pdf URL wrapper around an id, in either the form arXiv's API returns
+# (`result.entry_id`) or the form someone pastes out of their browser.
+ARXIV_URL_PREFIX_PATTERN = re.compile(r"^https?://(www\.)?arxiv\.org/(abs|pdf)/", re.IGNORECASE)
+
+
 def _strip_version(entry_id: str) -> str:
-    """'http://arxiv.org/abs/2501.12345v2' -> '2501.12345'"""
-    base = entry_id.rstrip("/").rsplit("/", 1)[-1]
-    if "v" in base:
-        base = base.rsplit("v", 1)[0]
-    return base
+    """'http://arxiv.org/abs/2501.12345v2' -> '2501.12345'.
+
+    A legacy id keeps its archive prefix ('.../abs/math.GT/0309136v1' ->
+    'math.GT/0309136'): that prefix is part of the id itself rather than a URL
+    path segment, so the id can't just be read off the last path component
+    without corrupting it -- and a corrupted key breaks dedup and every
+    lookup keyed by arxiv_id thereafter.
+    """
+    base = ARXIV_URL_PREFIX_PATTERN.sub("", entry_id.strip()).rstrip("/")
+    if base.lower().endswith(".pdf"):
+        base = base[:-4]
+    return re.sub(r"v\d+$", "", base)
+
+
+# Modern ("2501.12345") and legacy ("math.GT/0309136") arXiv id forms, with an
+# optional version suffix. Checked up front by `normalize_arxiv_id` so a typo
+# in a hand-typed id fails immediately with a clear message, rather than as an
+# opaque arXiv API error part-way through a run (or, worse, as an "error"
+# entry quietly returned inside an otherwise-successful feed).
+ARXIV_ID_PATTERN = re.compile(r"^(\d{4}\.\d{4,5}|[a-z-]+(\.[A-Za-z]{2})?/\d{7})(v\d+)?$", re.IGNORECASE)
+
+
+def normalize_arxiv_id(raw: str) -> str:
+    """Reduce a hand-supplied paper reference to the bare, version-stripped id
+    the sheet is keyed by. Accepts what someone would realistically paste:
+    '2501.12345', '2501.12345v2', 'arXiv:2501.12345', a full abs/pdf URL, or a
+    legacy 'hep-th/9711200'. Raises ValueError on anything that isn't a
+    recognizable arXiv id."""
+    value = re.sub(r"^arxiv:", "", raw.strip(), flags=re.IGNORECASE)
+    value = _strip_version(value)  # also unwraps an abs/pdf URL, if that's what this is
+    if not ARXIV_ID_PATTERN.match(value):
+        raise ValueError(f"{raw!r} is not a recognizable arXiv id")
+    return value
+
+
+def _candidate_from_result(result: arxiv.Result) -> PaperCandidate:
+    """Map an arXiv API result onto our own PaperCandidate shape -- shared by
+    the keyword-search path (`fetch_candidates`) and the by-id path
+    (`fetch_by_ids`), so both store identical fields for a given paper."""
+    return PaperCandidate(
+        arxiv_id=_strip_version(result.entry_id),
+        title=result.title.strip().replace("\n", " "),
+        authors=", ".join(a.name for a in result.authors),
+        published_date=result.published.date().isoformat(),
+        abstract=result.summary.strip().replace("\n", " "),
+        link=result.entry_id,
+        pdf_url=result.pdf_url,
+    )
 
 
 def _format_arxiv_datetime(d: date, end_of_day: bool) -> str:
@@ -165,15 +213,7 @@ def fetch_candidates(
         abstract = result.summary.strip().replace("\n", " ")
         if not passes_keyword_filter(abstract, settings.specific_keywords, settings.broad_keywords):
             continue
-        seen[arxiv_id] = PaperCandidate(
-            arxiv_id=arxiv_id,
-            title=result.title.strip().replace("\n", " "),
-            authors=", ".join(a.name for a in result.authors),
-            published_date=result.published.date().isoformat(),
-            abstract=abstract,
-            link=result.entry_id,
-            pdf_url=result.pdf_url,
-        )
+        seen[arxiv_id] = _candidate_from_result(result)
 
     logger.info(
         "arXiv matched %d raw result(s); %d passed the keyword filter",
@@ -181,6 +221,36 @@ def fetch_candidates(
         len(seen),
     )
     return list(seen.values())
+
+
+# arXiv answers an unknown or withdrawn id with an "error" entry inside an
+# otherwise-normal feed rather than an HTTP error, identifiable by this marker
+# in the entry's id.
+ARXIV_ERROR_ENTRY_MARKER = "arxiv.org/api/errors"
+
+
+def fetch_by_ids(arxiv_ids: list[str]) -> list[PaperCandidate]:
+    """Fetch specific papers by arXiv id, skipping the keyword search and
+    `passes_keyword_filter` entirely -- a paper asked for by id is wanted
+    whether or not it would ever have matched the standing queries (see
+    manual_deep_dive.py).
+
+    Ids arXiv doesn't return (unknown or withdrawn) are simply absent from the
+    result; the caller compares against what it asked for and reports the
+    difference, so one bad id doesn't sink the rest of the run.
+    """
+    if not arxiv_ids:
+        return []
+    client = arxiv.Client(page_size=100, delay_seconds=3.0, num_retries=3)
+    search = arxiv.Search(id_list=list(arxiv_ids), max_results=len(arxiv_ids))
+    found: dict[str, PaperCandidate] = {}
+    for result in client.results(search):
+        if ARXIV_ERROR_ENTRY_MARKER in result.entry_id or result.pdf_url is None:
+            continue
+        candidate = _candidate_from_result(result)
+        found[candidate.arxiv_id] = candidate
+    logger.info("arXiv returned %d of the %d requested id(s)", len(found), len(arxiv_ids))
+    return list(found.values())
 
 
 def download_pdf_bytes(pdf_url: str) -> bytes:

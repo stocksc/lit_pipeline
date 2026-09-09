@@ -33,7 +33,9 @@ def main() -> int:
     load_dotenv()
     settings = load_settings()
     papers_ws = sheets_store.open_sheets(settings.google_sheets)
-    papers_records = sheets_store.get_all_records(papers_ws)
+    # Papers a manual deep dive pulled in off-query never belong in the
+    # scheduled digest -- see reporting.exclude_manual_only.
+    papers_records = reporting.exclude_manual_only(sheets_store.get_all_records(papers_ws))
 
     window_end = datetime.now(timezone.utc).date()
     window_start = window_end - timedelta(days=settings.weekly_report.lookback_days)

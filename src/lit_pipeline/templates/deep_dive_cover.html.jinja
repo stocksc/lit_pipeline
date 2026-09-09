@@ -1,0 +1,37 @@
+{# Page 1 of the PDF bundle emailed by `lit-deep-dive --attach-pdfs`: the whole
+   deep-read write-up, with the paper's own PDF appended after it.
+
+   Rendered by pdf_bundle.py through PyMuPDF's Story engine, NOT by an email
+   client -- so this deliberately sticks to the small HTML/CSS subset Story
+   supports (headings, p, ul/li, b/i, font-size/color/margin). No tables, no
+   flexbox, no inline `style` tricks that report.html.jinja can get away with. #}
+<h1>{{ paper.title }}</h1>
+
+<p class="meta">
+  {{ paper.authors_display }}<br/>
+  {{ paper.published_date }} &middot; arXiv:{{ paper.arxiv_id }}<br/>
+  {{ paper.link }}
+</p>
+
+<p class="score">
+  Relevance {{ paper.triage_score }}/10{% if paper.original_triage_score != paper.triage_score %}
+  <span class="was">(initial triage: {{ paper.original_triage_score }}/10)</span>{% endif %}
+</p>
+{% if paper.score_rationale and paper.original_triage_score != paper.triage_score %}
+<p class="rationale">{{ paper.score_rationale }}</p>
+{% endif %}
+
+<h2>Summary</h2>
+<p>{{ paper.summary }}</p>
+
+{% if paper.relevance %}
+<h2>Why it's relevant</h2>
+<ul>{% for item in paper.relevance %}<li>{{ item }}</li>{% endfor %}</ul>
+{% endif %}
+
+{% if paper.limitations %}
+<h2>Limitations</h2>
+<ul>{% for item in paper.limitations %}<li>{{ item }}</li>{% endfor %}</ul>
+{% endif %}
+
+<p class="footer">Deep read by {{ deep_read_model }} for {{ report_title }}. The paper follows.</p>
