@@ -31,7 +31,12 @@ def triage_paper(
     settings: TriageSettings,
     interests: str,
     candidate: PaperCandidate,
+    max_tokens: int = 1024,
 ) -> tuple[TriageResult, LLMUsage]:
+    """`max_tokens` caps thinking *and* the answer together. 1024 is ample
+    for Haiku, which doesn't think by default; a model that thinks by
+    default (Opus 5.x, Sonnet 5.x, Fable) needs far more headroom or its
+    answer gets cut off."""
     user_content = (
         f"Researcher's interests:\n{interests}\n\n"
         f"Paper title: {candidate.title}\n\n"
@@ -39,14 +44,16 @@ def triage_paper(
     )
     response = client.messages.parse(
         model=settings.model,
-        max_tokens=1024,
+        max_tokens=max_tokens,
         system=TRIAGE_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
         output_format=TriageResult,
     )
     result = response.parsed_output
     if result is None:
-        raise ValueError(f"Triage call for {candidate.arxiv_id} returned no parsed output")
+        raise ValueError(
+            f"Triage call for {candidate.arxiv_id} returned no parsed output (stop_reason={response.stop_reason})"
+        )
     # Defensive clamp -- the schema declares 0-10 bounds, but don't trust it blindly.
     result.score = max(0, min(10, result.score))
     usage = LLMUsage(

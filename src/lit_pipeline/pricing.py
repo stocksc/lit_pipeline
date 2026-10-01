@@ -22,12 +22,17 @@ class ModelPricing:
     output_per_million: float
 
 
-# USD per 1M tokens. Sonnet 5 isn't used by this pipeline's default config
-# but is included for anyone who swaps deep_read.model to it.
+# USD per 1M tokens, checked against Anthropic's pricing page on 2026-10-01.
+# Only Haiku 4.5 and Opus 5 are used by the default config; the rest are
+# here for anyone who swaps a model in settings.yaml, and for the model
+# comparison in analysis/model_comparison/.
 PRICING: dict[str, ModelPricing] = {
     "claude-haiku-4-5": ModelPricing(input_per_million=1.00, output_per_million=5.00),
-    "claude-sonnet-5": ModelPricing(input_per_million=3.00, output_per_million=15.00),
+    "claude-sonnet-5": ModelPricing(input_per_million=2.00, output_per_million=10.00),
+    "claude-sonnet-5-5": ModelPricing(input_per_million=2.00, output_per_million=10.00),
     "claude-opus-5": ModelPricing(input_per_million=5.00, output_per_million=25.00),
+    "claude-opus-5-5": ModelPricing(input_per_million=4.00, output_per_million=20.00),
+    "claude-fable-5-1": ModelPricing(input_per_million=10.00, output_per_million=50.00),
 }
 
 

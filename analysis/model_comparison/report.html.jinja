@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Comparison Report</title>
+<style>
+  :root {
+    --bg: #f8f8f6; --surface: #ffffff; --text: #1d1d1b; --muted: #66655f; --border: #e2e1dc;
+    --accent: #3451b2;
+    --high-bg: #e2f1e5; --high-fg: #1d6531;
+    --mid-bg: #fbefd8; --mid-fg: #855600;
+    --low-bg: #ececea; --low-fg: #55554f;
+    --err-bg: #fbe5e5; --err-fg: #962020;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151514; --surface: #1e1e1c; --text: #ebeae5; --muted: #a2a19a; --border: #33322f;
+      --accent: #93a8ff;
+      --high-bg: #1b3824; --high-fg: #9ddcaf;
+      --mid-bg: #3b2d10; --mid-fg: #efc574;
+      --low-bg: #2a2a27; --low-fg: #bdbcb5;
+      --err-bg: #3d1c1c; --err-fg: #f3a1a1;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1500px; margin: 0 auto; padding: 28px 16px 72px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.2rem; margin: 44px 0 6px; }
+  p { margin: 0 0 10px; }
+  a { color: var(--accent); }
+  .subtle { color: var(--muted); }
+  .small { font-size: 0.85rem; }
+  ul.notes { margin: 12px 0 0; padding-left: 1.2em; color: var(--muted); }
+  ul.notes li { margin-bottom: 4px; }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border);
+                border-radius: 10px; margin-top: 12px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child > th, tr:last-child > td { border-bottom: none; }
+  thead th { font-size: 0.8rem; font-weight: 600; color: var(--muted); white-space: nowrap;
+             text-transform: uppercase; letter-spacing: 0.03em; }
+  th[scope=row] { font-size: 0.85rem; font-weight: 600; color: var(--muted); white-space: nowrap; width: 1%; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .group { border-left: 1px solid var(--border); }
+  .model-name { font-weight: 600; white-space: nowrap; }
+  .score { display: inline-block; min-width: 1.7em; padding: 1px 6px; border-radius: 6px; text-align: center;
+           font-weight: 650; font-variant-numeric: tabular-nums; }
+  .s-high { background: var(--high-bg); color: var(--high-fg); }
+  .s-mid { background: var(--mid-bg); color: var(--mid-fg); }
+  .s-low, .s-none { background: var(--low-bg); color: var(--low-fg); }
+  .arrow { color: var(--muted); padding: 0 4px; }
+  .narrative td { min-width: 270px; }
+  .narrative ul { margin: 0; padding-left: 1.1em; }
+  .narrative li { margin-bottom: 5px; }
+  .wc { display: block; margin-top: 6px; font-size: 0.78rem; color: var(--muted); }
+  .wc.over { color: var(--mid-fg); }
+  .err { display: inline-block; background: var(--err-bg); color: var(--err-fg); padding: 3px 8px;
+         border-radius: 6px; font-size: 0.85rem; }
+  details { margin-top: 6px; font-size: 0.85rem; }
+  summary { cursor: pointer; color: var(--muted); }
+  details p { margin: 6px 0 0; }
+  footer { margin-top: 48px; font-size: 0.8rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+{% macro badge(score) -%}
+  {%- if score is none -%}<span class="score s-none">–</span>
+  {%- else -%}<span class="score {{ 's-high' if score >= threshold else ('s-mid' if score >= 4 else 's-low') }}">{{ score }}</span>
+  {%- endif -%}
+{%- endmacro %}
+{% macro money(x, digits=4) -%}{{ '–' if x is none else ('$' ~ ('%.*f'|format(digits, x))) }}{%- endmacro %}
+{% macro count(x) -%}{{ '–' if x is none else '{:,.0f}'.format(x) }}{%- endmacro %}
+{% macro secs(x) -%}{{ '–' if x is none else ('%.0f'|format(x) ~ 's') }}{%- endmacro %}
+{% macro usage(c) -%}
+  {%- if c.status == 'ok' -%}{{ count(c.input_tokens) }} in / {{ count(c.output_tokens) }} out · {{ money(c.cost_usd) }} · {{ secs(c.latency_s) }}
+  {%- else -%}<span class="err">{{ c.status }}</span>{%- endif -%}
+{%- endmacro %}
+
+<h1>Model comparison: triage and deep read</h1>
+<p class="subtle">{{ papers|length }} papers × {{ cost_rows|length }} models · started {{ experiment.created_at[:10] }}
+  · total spent {{ money(total_cost, 2) }}</p>
+<ul class="notes small">
+  <li>Every model gets the production prompts, schemas and interests text; only the model changes.
+      Thinking and effort are left at each model's API default, as production calls them.</li>
+  <li>Triage ran {{ triage_repeats }} times per model as independent calls. Each model's deep read was given that
+      same model's triage #1.</li>
+  <li>Every model deep-read every paper. A † marks a deep read production wouldn't have run, because that
+      model's own triage #1 scored the paper below the threshold of {{ threshold }}.</li>
+  <li>Output tokens include any thinking the model did, which is billed as output even though its text isn't
+      returned.</li>
+  <li>Haiku 4.5 uses an older tokenizer: the newer models count ~30% more tokens for the same text. Token counts
+      are comparable among the newer models, but against Haiku compare cost.</li>
+</ul>
+
+<h2>Tokens, cost and speed</h2>
+<p class="subtle small">Per-call averages over successful calls, then totals for this experiment. Projected monthly
+  cost assumes production's September 2026 volume: {{ monthly_triage }} triage calls and {{ monthly_deep_reads }}
+  deep reads.</p>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th rowspan="2">Model</th>
+      <th rowspan="2" class="num">Price per M tokens<br>in / out</th>
+      <th colspan="4" class="group">Triage (per call)</th>
+      <th colspan="4" class="group">Deep read (per call)</th>
+      <th colspan="3" class="group">This experiment</th>
+      <th rowspan="2" class="num group">Projected<br>monthly</th>
+    </tr>
+    <tr>
+      <th class="num group">Tokens in</th><th class="num">Tokens out</th><th class="num">Cost</th><th class="num">Time</th>
+      <th class="num group">Tokens in</th><th class="num">Tokens out</th><th class="num">Cost</th><th class="num">Time</th>
+      <th class="num group">Tokens in</th><th class="num">Tokens out</th><th class="num">Cost</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in cost_rows %}
+    <tr>
+      <td><span class="model-name">{{ row.label }}</span><br><span class="subtle small">{{ row.note }}</span></td>
+      <td class="num">${{ '%g'|format(row.pricing.input_per_million) }} / ${{ '%g'|format(row.pricing.output_per_million) }}</td>
+      <td class="num group">{{ count(row.triage.avg_in) }}</td>
+      <td class="num">{{ count(row.triage.avg_out) }}</td>
+      <td class="num">{{ money(row.triage.avg_cost) }}</td>
+      <td class="num">{{ secs(row.triage.avg_latency) }}</td>
+      <td class="num group">{{ count(row.deep_read.avg_in) }}</td>
+      <td class="num">{{ count(row.deep_read.avg_out) }}</td>
+      <td class="num">{{ money(row.deep_read.avg_cost) }}</td>
+      <td class="num">{{ secs(row.deep_read.avg_latency) }}</td>
+      <td class="num group">{{ count(row.total_in) }}</td>
+      <td class="num">{{ count(row.total_out) }}</td>
+      <td class="num">{{ money(row.triage.total_cost + row.deep_read.total_cost, 2) }}</td>
+      <td class="num group">{{ money(row.monthly, 2) if row.monthly is defined else '–' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Scores</h2>
+<p class="subtle small">Triage scores from each of the {{ triage_repeats }} runs, then the deep-read score.
+  The production column is an earlier run (Haiku 4.5 triage, then Opus 5 deep read), shown for reference only.</p>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Paper</th>
+      <th>Production (earlier)</th>
+      {% for col in paper_sections[0].columns %}<th>{{ col.label }}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+  {% for sec in paper_sections %}
+    <tr>
+      <td><a href="#p-{{ sec.id }}">{{ sec.meta.title }}</a><br><span class="subtle small">{{ sec.id }}{{ sec.meta.version }}</span></td>
+      <td class="num">{% if sec.reference %}{{ badge(sec.reference.triage) }}<span class="arrow">→</span>{{ badge(sec.reference.deep_read) }}{% else %}–{% endif %}</td>
+      {% for col in sec.columns %}
+      <td class="num">
+        {% for s in col.triage_scores %}{{ badge(s) }} {% endfor %}<span class="arrow">→</span>
+        {%- if col.deep.status == 'ok' %}{{ badge(col.out.score) }}{% if col.deep.given_triage_score < threshold %} †{% endif %}
+        {%- else %} <span class="err">{{ col.deep.status }}</span>{% endif %}
+      </td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% for sec in paper_sections %}
+<h2 id="p-{{ sec.id }}">{{ sec.meta.title }}</h2>
+<p class="subtle small"><a href="{{ sec.meta.link }}">{{ sec.id }}{{ sec.meta.version }}</a>
+  · {{ '{:,}'.format(sec.meta.pdf_text_chars) }} characters of paper text, identical for every model
+  (sha256 {{ sec.meta.pdf_text_sha256[:12] }})</p>
+<div class="table-wrap">
+<table class="narrative">
+  <thead>
+    <tr><th></th>{% for col in sec.columns %}<th>{{ col.label }}</th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th scope="row">Triage</th>
+      {% for col in sec.columns %}
+      {% set t1 = col.triage[0] %}
+      <td>
+        {% for s in col.triage_scores %}{{ badge(s) }} {% endfor %}
+        {% if t1.status == 'ok' %}
+          <p style="margin-top:6px">{{ t1.output.rationale }}</p>
+          {% if t1.output.matched_interest %}<p class="subtle small">Matched interest: {{ t1.output.matched_interest }}</p>{% endif %}
+          <details><summary>All {{ col.triage|length }} triage rationales</summary>
+            {% for t in col.triage %}<p><strong>#{{ loop.index }}</strong>
+              {% if t.status == 'ok' %}{{ badge(t.output.score) }} {{ t.output.rationale }}{% else %}<span class="err">{{ t.status }}: {{ t.error }}</span>{% endif %}</p>{% endfor %}
+          </details>
+        {% else %}
+          <p><span class="err">{{ t1.status }}{% if t1.error %}: {{ t1.error }}{% endif %}</span></p>
+        {% endif %}
+      </td>
+      {% endfor %}
+    </tr>
+    <tr>
+      <th scope="row">Deep-read score</th>
+      {% for col in sec.columns %}
+      <td>
+        {% if col.deep.status == 'ok' %}
+          {{ badge(col.out.score) }} <span class="subtle small">given triage {{ col.deep.given_triage_score }}{% if col.deep.given_triage_score < threshold %} †{% endif %}</span>
+          <p style="margin-top:6px">{{ col.out.score_rationale }}</p>
+        {% else %}
+          <span class="err">{{ col.deep.status }}{% if col.deep.error %}: {{ col.deep.error }}{% elif col.deep.reason %}: {{ col.deep.reason }}{% endif %}</span>
+        {% endif %}
+      </td>
+      {% endfor %}
+    </tr>
+    <tr>
+      <th scope="row">Summary</th>
+      {% for col in sec.columns %}
+      <td>{% if col.out.summary %}{{ col.out.summary }}
+        <span class="wc{{ ' over' if col.summary_words > summary_target * 1.3 else '' }}">{{ col.summary_words }} words (target ~{{ summary_target }})</span>
+        {% else %}–{% endif %}</td>
+      {% endfor %}
+    </tr>
+    <tr>
+      <th scope="row">Relevance</th>
+      {% for col in sec.columns %}
+      <td>{% if col.out.relevance %}<ul>{% for b in col.out.relevance %}<li>{{ b }}</li>{% endfor %}</ul>
+        <span class="wc{{ ' over' if col.relevance_words > bullets_target * 1.3 else '' }}">{{ col.relevance_words }} words (target ~{{ bullets_target }})</span>
+        {% else %}–{% endif %}</td>
+      {% endfor %}
+    </tr>
+    <tr>
+      <th scope="row">Limitations</th>
+      {% for col in sec.columns %}
+      <td>{% if col.out.limitations %}<ul>{% for b in col.out.limitations %}<li>{{ b }}</li>{% endfor %}</ul>
+        <span class="wc{{ ' over' if col.limitations_words > bullets_target * 1.3 else '' }}">{{ col.limitations_words }} words (target ~{{ bullets_target }})</span>
+        {% else %}–{% endif %}</td>
+      {% endfor %}
+    </tr>
+    <tr>
+      <th scope="row">Affiliations</th>
+      {% for col in sec.columns %}
+      <td>{% if col.out.author_affiliations %}{{ col.out.author_affiliations|join(' · ') }}{% elif col.deep.status == 'ok' %}<span class="subtle">None identified</span>{% else %}–{% endif %}</td>
+      {% endfor %}
+    </tr>
+    <tr>
+      <th scope="row">Tokens, cost<br>and time</th>
+      {% for col in sec.columns %}
+      <td class="small">
+        {% for t in col.triage %}Triage #{{ loop.index }}: {{ usage(t) }}<br>{% endfor %}
+        Deep read: {{ usage(col.deep) }}
+      </td>
+      {% endfor %}
+    </tr>
+  </tbody>
+</table>
+</div>
+{% endfor %}
+
+<footer>
+  Generated {{ generated_at }} from results.json · config {{ experiment.config_hash[:12] }}
+  · interests {{ experiment.interests_sha256[:12] }} · triage max_tokens {{ experiment.triage_max_tokens }}
+</footer>
+</main>
+</body>
+</html>

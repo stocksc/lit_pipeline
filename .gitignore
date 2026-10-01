@@ -17,3 +17,6 @@ wheels/
 # Jupyter
 .ipynb_checkpoints/
 
+
+# Model comparison inputs: full paper text, not ours to redistribute
+analysis/model_comparison/inputs/

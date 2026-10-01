@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Comparison Report</title>
+<style>
+  :root {
+    --bg: #f8f8f6; --surface: #ffffff; --text: #1d1d1b; --muted: #66655f; --border: #e2e1dc;
+    --accent: #3451b2;
+    --high-bg: #e2f1e5; --high-fg: #1d6531;
+    --mid-bg: #fbefd8; --mid-fg: #855600;
+    --low-bg: #ececea; --low-fg: #55554f;
+    --err-bg: #fbe5e5; --err-fg: #962020;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151514; --surface: #1e1e1c; --text: #ebeae5; --muted: #a2a19a; --border: #33322f;
+      --accent: #93a8ff;
+      --high-bg: #1b3824; --high-fg: #9ddcaf;
+      --mid-bg: #3b2d10; --mid-fg: #efc574;
+      --low-bg: #2a2a27; --low-fg: #bdbcb5;
+      --err-bg: #3d1c1c; --err-fg: #f3a1a1;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1500px; margin: 0 auto; padding: 28px 16px 72px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.2rem; margin: 44px 0 6px; }
+  p { margin: 0 0 10px; }
+  a { color: var(--accent); }
+  .subtle { color: var(--muted); }
+  .small { font-size: 0.85rem; }
+  ul.notes { margin: 12px 0 0; padding-left: 1.2em; color: var(--muted); }
+  ul.notes li { margin-bottom: 4px; }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border);
+                border-radius: 10px; margin-top: 12px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child > th, tr:last-child > td { border-bottom: none; }
+  thead th { font-size: 0.8rem; font-weight: 600; color: var(--muted); white-space: nowrap;
+             text-transform: uppercase; letter-spacing: 0.03em; }
+  th[scope=row] { font-size: 0.85rem; font-weight: 600; color: var(--muted); white-space: nowrap; width: 1%; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .group { border-left: 1px solid var(--border); }
+  .model-name { font-weight: 600; white-space: nowrap; }
+  .score { display: inline-block; min-width: 1.7em; padding: 1px 6px; border-radius: 6px; text-align: center;
+           font-weight: 650; font-variant-numeric: tabular-nums; }
+  .s-high { background: var(--high-bg); color: var(--high-fg); }
+  .s-mid { background: var(--mid-bg); color: var(--mid-fg); }
+  .s-low, .s-none { background: var(--low-bg); color: var(--low-fg); }
+  .arrow { color: var(--muted); padding: 0 4px; }
+  .narrative td { min-width: 270px; }
+  .narrative ul { margin: 0; padding-left: 1.1em; }
+  .narrative li { margin-bottom: 5px; }
+  .wc { display: block; margin-top: 6px; font-size: 0.78rem; color: var(--muted); }
+  .wc.over { color: var(--mid-fg); }
+  .err { display: inline-block; background: var(--err-bg); color: var(--err-fg); padding: 3px 8px;
+         border-radius: 6px; font-size: 0.85rem; }
+  details { margin-top: 6px; font-size: 0.85rem; }
+  summary { cursor: pointer; color: var(--muted); }
+  details p { margin: 6px 0 0; }
+  footer { margin-top: 48px; font-size: 0.8rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+
+
+
+
+
+<h1>Model comparison: triage and deep read</h1>
+<p class="subtle">3 papers × 4 models · started 2026-10-01
+  · total spent $1.75</p>
+<ul class="notes small">
+  <li>Every model gets the production prompts, schemas and interests text; only the model changes.
+      Thinking and effort are left at each model's API default, as production calls them.</li>
+  <li>Triage ran 3 times per model as independent calls. Each model's deep read was given that
+      same model's triage #1.</li>
+  <li>Every model deep-read every paper. A † marks a deep read production wouldn't have run, because that
+      model's own triage #1 scored the paper below the threshold of 7.</li>
+  <li>Output tokens include any thinking the model did, which is billed as output even though its text isn't
+      returned.</li>
+  <li>Haiku 4.5 uses an older tokenizer: the newer models count ~30% more tokens for the same text. Token counts
+      are comparable among the newer models, but against Haiku compare cost.</li>
+</ul>
+
+<h2>Tokens, cost and speed</h2>
+<p class="subtle small">Per-call averages over successful calls, then totals for this experiment. Projected monthly
+  cost assumes production's September 2026 volume: 66 triage calls and 27
+  deep reads.</p>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th rowspan="2">Model</th>
+      <th rowspan="2" class="num">Price per M tokens<br>in / out</th>
+      <th colspan="4" class="group">Triage (per call)</th>
+      <th colspan="4" class="group">Deep read (per call)</th>
+      <th colspan="3" class="group">This experiment</th>
+      <th rowspan="2" class="num group">Projected<br>monthly</th>
+    </tr>
+    <tr>
+      <th class="num group">Tokens in</th><th class="num">Tokens out</th><th class="num">Cost</th><th class="num">Time</th>
+      <th class="num group">Tokens in</th><th class="num">Tokens out</th><th class="num">Cost</th><th class="num">Time</th>
+      <th class="num group">Tokens in</th><th class="num">Tokens out</th><th class="num">Cost</th>
+    </tr>
+  </thead>
+  <tbody>
+  
+    <tr>
+      <td><span class="model-name">Haiku 4.5</span><br><span class="subtle small">No thinking (not enabled by production); no effort control; older tokenizer</span></td>
+      <td class="num">$1 / $5</td>
+      <td class="num group">1,132</td>
+      <td class="num">130</td>
+      <td class="num">$0.0018</td>
+      <td class="num">2s</td>
+      <td class="num group">17,451</td>
+      <td class="num">556</td>
+      <td class="num">$0.0202</td>
+      <td class="num">9s</td>
+      <td class="num group">62,537</td>
+      <td class="num">2,841</td>
+      <td class="num">$0.08</td>
+      <td class="num group">$0.66</td>
+    </tr>
+  
+    <tr>
+      <td><span class="model-name">Sonnet 5.5</span><br><span class="subtle small">Adaptive thinking (its only thinking mode); API-default effort</span></td>
+      <td class="num">$2 / $10</td>
+      <td class="num group">1,565</td>
+      <td class="num">159</td>
+      <td class="num">$0.0047</td>
+      <td class="num">3s</td>
+      <td class="num group">23,316</td>
+      <td class="num">649</td>
+      <td class="num">$0.0531</td>
+      <td class="num">6s</td>
+      <td class="num group">84,030</td>
+      <td class="num">3,374</td>
+      <td class="num">$0.20</td>
+      <td class="num group">$1.75</td>
+    </tr>
+  
+    <tr>
+      <td><span class="model-name">Opus 5.5</span><br><span class="subtle small">Adaptive thinking, always on; default effort medium</span></td>
+      <td class="num">$4 / $20</td>
+      <td class="num group">1,565</td>
+      <td class="num">160</td>
+      <td class="num">$0.0095</td>
+      <td class="num">3s</td>
+      <td class="num group">23,305</td>
+      <td class="num">728</td>
+      <td class="num">$0.1078</td>
+      <td class="num">10s</td>
+      <td class="num group">83,997</td>
+      <td class="num">3,623</td>
+      <td class="num">$0.41</td>
+      <td class="num group">$3.53</td>
+    </tr>
+  
+    <tr>
+      <td><span class="model-name">Fable 5.1</span><br><span class="subtle small">Adaptive thinking, always on; default effort high</span></td>
+      <td class="num">$10 / $50</td>
+      <td class="num group">1,565</td>
+      <td class="num">156</td>
+      <td class="num">$0.0234</td>
+      <td class="num">5s</td>
+      <td class="num group">23,290</td>
+      <td class="num">1,043</td>
+      <td class="num">$0.2851</td>
+      <td class="num">17s</td>
+      <td class="num group">83,953</td>
+      <td class="num">4,531</td>
+      <td class="num">$1.07</td>
+      <td class="num group">$9.24</td>
+    </tr>
+  
+  </tbody>
+</table>
+</div>
+
+<h2>Scores</h2>
+<p class="subtle small">Triage scores from each of the 3 runs, then the deep-read score.
+  The production column is an earlier run (Haiku 4.5 triage, then Opus 5 deep read), shown for reference only.</p>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Paper</th>
+      <th>Production (earlier)</th>
+      <th>Haiku 4.5</th><th>Sonnet 5.5</th><th>Opus 5.5</th><th>Fable 5.1</th>
+    </tr>
+  </thead>
+  <tbody>
+  
+    <tr>
+      <td><a href="#p-2209.07850">FairGBM: Gradient Boosting with Fairness Constraints</a><br><span class="subtle small">2209.07850v5</span></td>
+      <td class="num"><span class="score s-high">9</span><span class="arrow">→</span><span class="score s-high">9</span></td>
+      
+      <td class="num">
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="arrow">→</span><span class="score s-high">9</span>
+      </td>
+      
+      <td class="num">
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">10</span> <span class="arrow">→</span><span class="score s-high">9</span>
+      </td>
+      
+      <td class="num">
+        <span class="score s-high">10</span> <span class="score s-high">10</span> <span class="score s-high">9</span> <span class="arrow">→</span><span class="score s-high">9</span>
+      </td>
+      
+      <td class="num">
+        <span class="score s-high">10</span> <span class="score s-high">10</span> <span class="score s-high">10</span> <span class="arrow">→</span><span class="score s-high">9</span>
+      </td>
+      
+    </tr>
+  
+    <tr>
+      <td><a href="#p-2512.23943">Statistical Guarantees in the Search for Less Discriminatory Algorithms</a><br><span class="subtle small">2512.23943v2</span></td>
+      <td class="num"><span class="score s-high">9</span><span class="arrow">→</span><span class="score s-high">9</span></td>
+      
+      <td class="num">
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="arrow">→</span><span class="score s-high">9</span>
+      </td>
+      
+      <td class="num">
+        <span class="score s-high">10</span> <span class="score s-high">10</span> <span class="score s-high">10</span> <span class="arrow">→</span><span class="score s-high">9</span>
+      </td>
+      
+      <td class="num">
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="arrow">→</span><span class="score s-high">8</span>
+      </td>
+      
+      <td class="num">
+        <span class="score s-high">9</span> <span class="score s-high">10</span> <span class="score s-high">10</span> <span class="arrow">→</span><span class="score s-high">9</span>
+      </td>
+      
+    </tr>
+  
+    <tr>
+      <td><a href="#p-2504.21259">STRATA: A Name-and-Geography Race Inference Model for Fair Lending and Housing Equity Applications</a><br><span class="subtle small">2504.21259v2</span></td>
+      <td class="num"><span class="score s-high">9</span><span class="arrow">→</span><span class="score s-high">8</span></td>
+      
+      <td class="num">
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="arrow">→</span><span class="score s-high">8</span>
+      </td>
+      
+      <td class="num">
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="arrow">→</span><span class="score s-high">8</span>
+      </td>
+      
+      <td class="num">
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">8</span> <span class="arrow">→</span><span class="score s-high">8</span>
+      </td>
+      
+      <td class="num">
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="arrow">→</span><span class="score s-high">8</span>
+      </td>
+      
+    </tr>
+  
+  </tbody>
+</table>
+</div>
+
+
+<h2 id="p-2209.07850">FairGBM: Gradient Boosting with Fairness Constraints</h2>
+<p class="subtle small"><a href="http://arxiv.org/abs/2209.07850v5">2209.07850v5</a>
+  · 36,120 characters of paper text, identical for every model
+  (sha256 df0ca936f2a0)</p>
+<div class="table-wrap">
+<table class="narrative">
+  <thead>
+    <tr><th></th><th>Haiku 4.5</th><th>Sonnet 5.5</th><th>Opus 5.5</th><th>Fable 5.1</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th scope="row">Triage</th>
+      
+      
+      <td>
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">9</span> 
+        
+          <p style="margin-top:6px">This paper presents a novel debiasing methodology (FairGBM) for gradient boosted decision trees with fairness constraints, directly addressing the researcher&#39;s core interest in new debiasing techniques for machine learning models. The work is particularly relevant given the focus on LightGBM/XGBoost-class models in high-stakes domains like financial services, and the emphasis on practical implementation with computational efficiency makes it highly applicable to credit scoring and similar applications.</p>
+          <p class="subtle small">Matched interest: Debiasing methodologies for machine learning models (XGBoost, LightGBM) in high-stakes domains</p>
+          <details><summary>All 3 triage rationales</summary>
+            <p><strong>#1</strong>
+              <span class="score s-high">9</span> This paper presents a novel debiasing methodology (FairGBM) for gradient boosted decision trees with fairness constraints, directly addressing the researcher&#39;s core interest in new debiasing techniques for machine learning models. The work is particularly relevant given the focus on LightGBM/XGBoost-class models in high-stakes domains like financial services, and the emphasis on practical implementation with computational efficiency makes it highly applicable to credit scoring and similar applications.</p><p><strong>#2</strong>
+              <span class="score s-high">9</span> This paper directly addresses fair machine learning for gradient boosting models (specifically GBDT like XGBoost/LightGBM) with a novel debiasing methodology that maintains predictive performance. It&#39;s highly relevant to the researcher&#39;s interests in debiasing ML models, covers a financial services domain, and emphasizes practical implementation with training efficiency—exactly the kind of technical contribution the researcher prioritizes.</p><p><strong>#3</strong>
+              <span class="score s-high">9</span> This paper directly addresses debiasing methodology for machine learning models (specifically GBDTs like XGBoost/LightGBM) in high-stakes domains including financial services, which is core to the researcher&#39;s interests. The work presents a novel in-processing fairness technique with practical implementation considerations, demonstrating significant computational efficiency gains—exactly the kind of technical ML contribution the researcher values.</p>
+          </details>
+        
+      </td>
+      
+      
+      <td>
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">10</span> 
+        
+          <p style="margin-top:6px">FairGBM is a novel in-processing debiasing method for gradient boosted trees (LightGBM-based) that targets high-stakes tabular settings like financial services, so it applies directly to credit scoring. It also has an open-source Python implementation; it is not an LDA search or regulatory paper, so it falls just short of a perfect 10.</p>
+          <p class="subtle small">Matched interest: Debiasing machine learning models (XGBoost, LightGBM) with applicability to credit scoring</p>
+          <details><summary>All 3 triage rationales</summary>
+            <p><strong>#1</strong>
+              <span class="score s-high">9</span> FairGBM is a novel in-processing debiasing method for gradient boosted trees (LightGBM-based) that targets high-stakes tabular settings like financial services, so it applies directly to credit scoring. It also has an open-source Python implementation; it is not an LDA search or regulatory paper, so it falls just short of a perfect 10.</p><p><strong>#2</strong>
+              <span class="score s-high">9</span> Novel in-processing debiasing method for gradient boosted trees (GBDT) that targets tabular, high-stakes settings like financial services, so it applies directly to credit scoring models. The FairGBM implementation is open source in Python. It falls just short of a 10 because it isn&#39;t specific to fair lending or LDA search.</p><p><strong>#3</strong>
+              <span class="score s-high">10</span> FairGBM is a novel in-processing debiasing method for gradient boosted trees (LightGBM-based), aimed at tabular, high-stakes domains such as financial services and credit. It also has an open-source Python implementation, so it closely matches the ideal profile of a technical debiasing method that applies to credit scoring.</p>
+          </details>
+        
+      </td>
+      
+      
+      <td>
+        <span class="score s-high">10</span> <span class="score s-high">10</span> <span class="score s-high">9</span> 
+        
+          <p style="margin-top:6px">FairGBM is a novel in-processing debiasing method built directly on GBDT (LightGBM-based), targeted at financial services tabular data, with an open-source Python implementation. That matches the researcher&#39;s ideal &#39;perfect 10&#39; description almost exactly.</p>
+          <p class="subtle small">Matched interest: Novel debiasing techniques for ML models (XGBoost/LightGBM) applicable to credit scoring, with code</p>
+          <details><summary>All 3 triage rationales</summary>
+            <p><strong>#1</strong>
+              <span class="score s-high">10</span> FairGBM is a novel in-processing debiasing method built directly on GBDT (LightGBM-based), targeted at financial services tabular data, with an open-source Python implementation. That matches the researcher&#39;s ideal &#39;perfect 10&#39; description almost exactly.</p><p><strong>#2</strong>
+              <span class="score s-high">10</span> FairGBM is a novel in-processing debiasing method for gradient boosted trees (built on LightGBM) applicable to financial services/credit scoring, with an open-source Python implementation emphasizing practical adoption — nearly exactly the user&#39;s ideal paper.</p><p><strong>#3</strong>
+              <span class="score s-high">9</span> FairGBM is a novel in-processing debiasing method for GBDT models (LightGBM-based), directly applicable to credit scoring and financial services, with an open-source Python implementation. It closely matches the researcher&#39;s ideal paper; the abstract doesn&#39;t explicitly mention code examples or credit-specific evaluation, so it falls just short of a 10.</p>
+          </details>
+        
+      </td>
+      
+      
+      <td>
+        <span class="score s-high">10</span> <span class="score s-high">10</span> <span class="score s-high">10</span> 
+        
+          <p style="margin-top:6px">FairGBM is a novel in-processing debiasing technique for gradient boosted trees (LightGBM-based) explicitly targeting financial services tabular data, with an open-source implementation—essentially the researcher&#39;s described perfect-10 paper.</p>
+          <p class="subtle small">Matched interest: New debiasing methodologies for ML models (XGBoost/LightGBM) applicable to credit scoring</p>
+          <details><summary>All 3 triage rationales</summary>
+            <p><strong>#1</strong>
+              <span class="score s-high">10</span> FairGBM is a novel in-processing debiasing technique for gradient boosted trees (LightGBM-based) explicitly targeting financial services tabular data, with an open-source implementation—essentially the researcher&#39;s described perfect-10 paper.</p><p><strong>#2</strong>
+              <span class="score s-high">10</span> FairGBM is a novel in-processing debiasing technique for gradient boosted trees (LightGBM-based) explicitly motivated by financial services, with an open-source implementation — this is almost exactly the researcher&#39;s described perfect-10 paper.</p><p><strong>#3</strong>
+              <span class="score s-high">10</span> FairGBM is a novel in-processing debiasing technique for gradient boosted trees (LightGBM-based) explicitly targeting financial services, with an open-source implementation—essentially the researcher&#39;s described perfect 10.</p>
+          </details>
+        
+      </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Deep-read score</th>
+      
+      <td>
+        
+          <span class="score s-high">9</span> <span class="subtle small">given triage 9</span>
+          <p style="margin-top:6px">Score matches initial triage (9/10); full paper confirms this is a highly relevant contribution—a production-ready debiasing method for GBDT with open-source implementation, theoretical grounding via proxy-Lagrangian, and empirical validation on both benchmark and real financial data. The speed advantage and handling of practical constraints like fixed FPR budgets strengthens relevance to practitioners despite limitations on fairness metric scope and randomized classifier theory-practice gap.</p>
+        
+      </td>
+      
+      <td>
+        
+          <span class="score s-high">9</span> <span class="subtle small">given triage 9</span>
+          <p style="margin-top:6px">Matches the initial 9: the full text confirms a novel, fast, open-source in-processing method for LightGBM directly usable for credit models, but it is not an LDA-search or regulatory paper and requires protected attributes in training.</p>
+        
+      </td>
+      
+      <td>
+        
+          <span class="score s-high">9</span> <span class="subtle small">given triage 10</span>
+          <p style="margin-top:6px">Slightly below the triage score of 10 because training on protected attributes poses legal problems in US lending and there is no credit-specific validation, but the full text confirms a novel, practical GBDT debiasing method with released Python code.</p>
+        
+      </td>
+      
+      <td>
+        
+          <span class="score s-high">9</span> <span class="subtle small">given triage 10</span>
+          <p style="margin-top:6px">Slightly below the 10 triage score: the full text confirms a novel, well-engineered, open-source GBDT debiasing method, but the real-world case study is fraud detection with unreleased data rather than credit scoring, and deployment relies on the last-iterate classifier without the stated theoretical guarantees.</p>
+        
+      </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Summary</th>
+      
+      <td>FairGBM is an in-processing fairness framework for gradient boosted decision trees (GBDT) that enforces fairness constraints during training with minimal performance loss. The method uses a dual ascent learning approach with differentiable cross-entropy-based proxy constraints for fairness metrics (predictive equality, equal opportunity, demographic parity). Implemented as a LightGBM fork, FairGBM achieves an order of magnitude speedup compared to existing constrained optimization methods like Fairlearn EG, while maintaining or improving fairness-performance trade-offs on five benchmark datasets and a real-world account opening fraud case study.
+        <span class="wc">83 words (target ~100)</span>
+        </td>
+      
+      <td>FairGBM is an in-processing fairness method for gradient boosted trees, implemented as a fork of LightGBM. It trains under group-wise error-rate constraints (equal opportunity, predictive equality, demographic parity) using a proxy-Lagrangian dual ascent. Non-differentiable fairness metrics are replaced by cross-entropy-based convex proxies. The final iterate acts as a randomized classifier at no extra memory cost. On five folktables datasets and a real account-opening fraud dataset, it matches LightGBM accuracy with much higher fairness. It trains roughly 10x faster than Fairlearn EG, and it supports constraints at fixed ROC points such as 5% FPR.
+        <span class="wc">93 words (target ~100)</span>
+        </td>
+      
+      <td>FairGBM adds fairness constraints directly into gradient-boosted tree training (a LightGBM fork). It casts constrained optimization as a two-player game using a proxy-Lagrangian: the model player descends on a loss with smooth cross-entropy-based proxies for FPR, FNR, or positive-prediction rates, while the Lagrange-multiplier player ascends on the original non-differentiable constraints. Because every boosting iterate contains all previous ones, the randomized classifier costs no extra memory. The method supports constraints at a chosen ROC operating point, such as a fixed FPR. On five folktables datasets and a proprietary account-opening fraud dataset, it Pareto-dominates Fairlearn EG, grid search, and reweighing, and trains roughly 10x faster than EG.
+        <span class="wc">105 words (target ~100)</span>
+        </td>
+      
+      <td>FairGBM is an in-processing fairness method for gradient boosted decision trees, implemented as a fork of LightGBM with a Python interface. It uses a proxy-Lagrangian dual ascent: the model player descends on a cross-entropy-based differentiable surrogate of group error-rate constraints (FPR, FNR, predicted-positive rate → predictive equality, equal opportunity, demographic parity), while the Lagrange multipliers ascend on the original non-differentiable constraint violations. Because each GBDT iterate contains all prior ones, the theoretically grounded randomized classifier costs no extra memory. Evaluated on five folktables ACS datasets and a 500K-row account-opening fraud dataset, it Pareto-dominates fairlearn EG/GS/RS while training ~10x faster than EG, and supports constraints at fixed FPR operating points.
+        <span class="wc">109 words (target ~100)</span>
+        </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Relevance</th>
+      
+      <td><ul><li>Novel in-processing debiasing technique directly applicable to GBDT models (XGBoost/LightGBM) used in credit scoring</li><li>Addresses non-differentiability of fairness metrics through smooth cross-entropy proxies enabling gradient-based optimization</li><li>Practical implementation with code released; demonstrates scalability advantage (2-21x faster than baselines)</li><li>Handles real-world constraints like fixed FPR budgets and class imbalance common in financial applications</li><li>Validates on folktables benchmark datasets and actual account fraud detection task in financial services</li></ul>
+        <span class="wc over">66 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Novel in-processing debiasing for GBDT (LightGBM), the dominant model class in credit scoring and tabular risk models.</li><li>Open-source Python package with reproducible experiments, matching the interest in code and technical ML methods.</li><li>Compares against Fairlearn EG/GS and handles fixed-FPR or fixed-budget constraints, which are practical in lending and fraud.</li></ul>
+        <span class="wc">49 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>In-processing debiasing built into LightGBM, the model class commonly used in credit scoring.</li><li>Open-source Python package (github.com/feedzai/fairgbm) with a scikit-learn-style interface.</li><li>Supports equal opportunity, predictive equality, and demographic parity constraints, with continuous scores and fixed-FPR operating points.</li><li>Gives a fast way to generate candidate models for LDA search.</li></ul>
+        <span class="wc">48 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Directly a novel debiasing technique for LightGBM-style models applicable to credit decisioning, with open-source code (github.com/feedzai/fairgbm) and Python API.</li><li>Supports Disparate-Impact-relevant metrics (demographic parity, equal opportunity, predictive equality) and multi-group sensitive attributes.</li><li>Fixed-FPR constraint fulfillment matches real lending/fraud operating constraints; strong empirical comparison to fairlearn baselines.</li></ul>
+        <span class="wc">46 words (target ~50)</span>
+        </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Limitations</th>
+      
+      <td><ul><li>Focuses on binary classification; regression extension mentioned as &#39;straightforward&#39; but not demonstrated</li><li>Randomized classifier theoretical guarantee requires sampling across training iterates; deterministic last-iterate used in practice lacks same bounds</li><li>Fairness metrics limited to group-wise parity constraints (FPR/FNR/demographic parity); does not address other fairness definitions or intersectional fairness</li><li>Account opening fraud dataset anonymized and proprietary—reproducibility limited to folktables; real-world generalization unclear</li><li>No comparison with recent LLM-based fairness methods or adversarial debiasing approaches; fairness literature somewhat dated (2019-2021 focus)</li></ul>
+        <span class="wc over">77 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Needs protected attribute labels at training time, so proxy or imputed attributes (e.g., BISG) are not addressed.</li><li>Does not do LDA search or disparate impact legal analysis; it only equalizes group error rates.</li><li>Evaluated on binary sensitive attributes and a proprietary fraud dataset (not released).</li><li>It is a LightGBM fork, so it may lag upstream versions.</li></ul>
+        <span class="wc">56 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Requires the protected attribute at training time; using it in US credit models raises disparate-treatment and ECOA/Reg B concerns.</li><li>Real-world validation uses proprietary fraud data; the public benchmarks are census income tasks, not credit.</li><li>Experiments cover only binary groups.</li><li>Theoretical guarantees apply to the randomized classifier, which is less practical to deploy.</li><li>Does not address adverse-action explainability.</li></ul>
+        <span class="wc">57 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Requires sensitive attributes at training time (not inference) — fine for HMDA-like data but needs imputed race (e.g., BISG) in most lending contexts.</li><li>Real-world validation is fraud detection, not credit underwriting; the AOF dataset is proprietary/anonymized and not released.</li><li>Theoretical guarantees hold for the randomized classifier; practitioners will deploy the last iterate, which lacks those guarantees.</li><li>Custom C++ LightGBM fork may lag upstream LightGBM features and raise model-governance/validation hurdles in regulated institutions.</li></ul>
+        <span class="wc over">72 words (target ~50)</span>
+        </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Affiliations</th>
+      
+      <td>Feedzai · MPI for Intelligent Systems, Tübingen · UC Irvine</td>
+      
+      <td>Feedzai · MPI for Intelligent Systems, Tübingen · UC Irvine</td>
+      
+      <td>Feedzai · MPI for Intelligent Systems, Tübingen · UC Irvine</td>
+      
+      <td>Feedzai · MPI for Intelligent Systems, Tübingen · UC Irvine</td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Tokens, cost<br>and time</th>
+      
+      <td class="small">
+        Triage #1: 1,034 in / 144 out · $0.0018 · 2s<br>Triage #2: 1,034 in / 115 out · $0.0016 · 2s<br>Triage #3: 1,034 in / 119 out · $0.0016 · 2s<br>
+        Deep read: 12,596 in / 567 out · $0.0154 · 11s
+      </td>
+      
+      <td class="small">
+        Triage #1: 1,408 in / 167 out · $0.0045 · 4s<br>Triage #2: 1,408 in / 158 out · $0.0044 · 2s<br>Triage #3: 1,408 in / 158 out · $0.0044 · 2s<br>
+        Deep read: 16,486 in / 638 out · $0.0394 · 6s
+      </td>
+      
+      <td class="small">
+        Triage #1: 1,408 in / 147 out · $0.0086 · 2s<br>Triage #2: 1,408 in / 148 out · $0.0086 · 2s<br>Triage #3: 1,408 in / 176 out · $0.0092 · 3s<br>
+        Deep read: 16,460 in / 684 out · $0.0795 · 9s
+      </td>
+      
+      <td class="small">
+        Triage #1: 1,408 in / 140 out · $0.0211 · 4s<br>Triage #2: 1,408 in / 141 out · $0.0211 · 4s<br>Triage #3: 1,408 in / 133 out · $0.0207 · 3s<br>
+        Deep read: 16,455 in / 828 out · $0.2059 · 14s
+      </td>
+      
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="p-2512.23943">Statistical Guarantees in the Search for Less Discriminatory Algorithms</h2>
+<p class="subtle small"><a href="http://arxiv.org/abs/2512.23943v2">2512.23943v2</a>
+  · 56,006 characters of paper text, identical for every model
+  (sha256 efa264f98817)</p>
+<div class="table-wrap">
+<table class="narrative">
+  <thead>
+    <tr><th></th><th>Haiku 4.5</th><th>Sonnet 5.5</th><th>Opus 5.5</th><th>Fable 5.1</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th scope="row">Triage</th>
+      
+      
+      <td>
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">9</span> 
+        
+          <p style="margin-top:6px">This paper directly addresses Less Discriminatory Algorithm (LDA) Search, one of your explicitly stated core interests, with a novel methodological contribution (adaptive stopping algorithm) that provides statistical guarantees for fairness certification. The work is highly technical, grounded in real-world credit and housing domains, and tackles a key regulatory question about algorithmic fairness obligations—perfectly aligned with your interest in fair lending, debiasing methodologies, and fairness regulators (CFPB, HUD, FHFA).</p>
+          <p class="subtle small">Matched interest: Less Discriminatory Alternative Search (LDA Search) and debiasing methodologies</p>
+          <details><summary>All 3 triage rationales</summary>
+            <p><strong>#1</strong>
+              <span class="score s-high">9</span> This paper directly addresses Less Discriminatory Algorithm (LDA) Search, one of your explicitly stated core interests, with a novel methodological contribution (adaptive stopping algorithm) that provides statistical guarantees for fairness certification. The work is highly technical, grounded in real-world credit and housing domains, and tackles a key regulatory question about algorithmic fairness obligations—perfectly aligned with your interest in fair lending, debiasing methodologies, and fairness regulators (CFPB, HUD, FHFA).</p><p><strong>#2</strong>
+              <span class="score s-high">9</span> This paper directly addresses LDA (Less Discriminatory Alternative) search, a core interest explicitly mentioned by the researcher. It provides a novel statistical methodology for algorithmic fairness with formal guarantees, validated on credit and housing datasets—exactly matching the researcher&#39;s focus on fair lending and algorithmic debiasing. The work is highly technical and law-adjacent, addressing regulatory expectations from firms conducting good-faith fairness searches.</p><p><strong>#3</strong>
+              <span class="score s-high">9</span> This paper directly addresses LDA Search, a core interest explicitly mentioned by the researcher. It provides a novel statistical methodology for searching for less discriminatory algorithms with formal guarantees, validated on real-world credit and housing datasets. The work bridges legal doctrine and algorithmic fairness, offering a principled approach to a key regulatory concern in fair lending.</p>
+          </details>
+        
+      </td>
+      
+      
+      <td>
+        <span class="score s-high">10</span> <span class="score s-high">10</span> <span class="score s-high">10</span> 
+        
+          <p style="margin-top:6px">Directly addresses LDA search for disparate impact, with a new technical method (adaptive stopping algorithm with statistical guarantees) validated on real credit and housing datasets, and ties to legal doctrine and regulator expectations. It squarely hits the researcher&#39;s core interests, though it is a search/certification method rather than a debiasing technique and code availability is unknown.</p>
+          <p class="subtle small">Matched interest: Less Discriminatory Alternative Search (LDA Search)</p>
+          <details><summary>All 3 triage rationales</summary>
+            <p><strong>#1</strong>
+              <span class="score s-high">10</span> Directly addresses LDA search for disparate impact, with a new technical method (adaptive stopping algorithm with statistical guarantees) validated on real credit and housing datasets, and ties to legal doctrine and regulator expectations. It squarely hits the researcher&#39;s core interests, though it is a search/certification method rather than a debiasing technique and code availability is unknown.</p><p><strong>#2</strong>
+              <span class="score s-high">10</span> Directly addresses Less Discriminatory Alternative search, a core stated interest, with a novel technical method (adaptive stopping algorithm with statistical guarantees) validated on real credit and housing data. It also has legal and regulatory relevance for fair lending; the only uncertainty is whether it ships Python code.</p><p><strong>#3</strong>
+              <span class="score s-high">10</span> Directly addresses LDA search for disparate impact, with a novel technical method (adaptive stopping algorithm with statistical guarantees) validated on credit and housing datasets. It combines law, ML, and fair lending, which are the researcher&#39;s core interests.</p>
+          </details>
+        
+      </td>
+      
+      
+      <td>
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">9</span> 
+        
+          <p style="margin-top:6px">This paper sits squarely on LDA search for credit and housing. It contributes a technical stopping algorithm with statistical guarantees for model-multiplicity-based searches, and it engages directly with the legal and regulatory context. It is not a novel debiasing method per se, and the abstract mentions no code, but it is highly responsive to a core interest.</p>
+          <p class="subtle small">Matched interest: Less Discriminatory Alternative Search (LDA Search)</p>
+          <details><summary>All 3 triage rationales</summary>
+            <p><strong>#1</strong>
+              <span class="score s-high">9</span> This paper sits squarely on LDA search for credit and housing. It contributes a technical stopping algorithm with statistical guarantees for model-multiplicity-based searches, and it engages directly with the legal and regulatory context. It is not a novel debiasing method per se, and the abstract mentions no code, but it is highly responsive to a core interest.</p><p><strong>#2</strong>
+              <span class="score s-high">9</span> Directly addresses LDA search, a core interest, with a novel technical contribution: an adaptive stopping algorithm with statistical guarantees for model-multiplicity-based debiasing. It is validated on credit and housing data and has clear legal and regulatory relevance. The abstract does not mention code, which keeps it just short of a perfect score.</p><p><strong>#3</strong>
+              <span class="score s-high">9</span> Directly addresses LDA search for algorithmic models, with a novel technical method (an adaptive stopping algorithm with statistical guarantees) validated on credit and housing data. It ties into regulator expectations and legal doctrine. It is not strictly a debiasing technique and no code is mentioned, but it is highly central to the stated interests.</p>
+          </details>
+        
+      </td>
+      
+      
+      <td>
+        <span class="score s-high">9</span> <span class="score s-high">10</span> <span class="score s-high">10</span> 
+        
+          <p style="margin-top:6px">Directly addresses LDA Search, a specifically named interest, with a novel technical method (adaptive stopping algorithm with statistical guarantees under model multiplicity) validated on credit and housing datasets, and ties into legal/regulatory context. Only missing explicit code examples to be a perfect 10.</p>
+          <p class="subtle small">Matched interest: Less Discriminatory Alternative Search (LDA Search)</p>
+          <details><summary>All 3 triage rationales</summary>
+            <p><strong>#1</strong>
+              <span class="score s-high">9</span> Directly addresses LDA Search, a specifically named interest, with a novel technical method (adaptive stopping algorithm with statistical guarantees under model multiplicity) validated on credit and housing datasets, and ties into legal/regulatory context. Only missing explicit code examples to be a perfect 10.</p><p><strong>#2</strong>
+              <span class="score s-high">10</span> Directly addresses Less Discriminatory Alternative search for algorithms with a novel technical method (adaptive stopping algorithm with statistical guarantees), tied to U.S. discrimination law, regulators, and validated on credit and housing datasets—squarely central to the researcher&#39;s stated focus.</p><p><strong>#3</strong>
+              <span class="score s-high">10</span> This paper directly addresses Less Discriminatory Alternative (LDA) search with a novel technical method (adaptive stopping algorithm with statistical guarantees), framed in U.S. discrimination law, validated on credit and housing datasets, and tied to regulator expectations. It squarely hits the researcher&#39;s core focus on LDA search, disparate impact, fair lending, and technical ML methods.</p>
+          </details>
+        
+      </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Deep-read score</th>
+      
+      <td>
+        
+          <span class="score s-high">9</span> <span class="subtle small">given triage 9</span>
+          <p style="margin-top:6px">Score remains 9—the full paper confirms the abstract&#39;s promise. The adaptive stopping algorithm with anytime-valid statistical guarantees is novel and directly solves a regulatory problem Black et al. (2024) identified. Real-world credit/housing validation is present, though on smaller datasets than industry practice. The work is highly technical (optimal stopping theory, anytime-valid inference) and practically grounded, with code promised, making it excellent for your debiasing + fair lending interests. Minor deduction from perfect score reflects limited scope (disparate impact only, iid assumption) and that experiments are semi-synthetic rather than fully deployed, but these are expected limitations, not surprises from reading the full text.</p>
+        
+      </td>
+      
+      <td>
+        
+          <span class="score s-high">9</span> <span class="subtle small">given triage 10</span>
+          <p style="margin-top:6px">Slightly below the triage score of 10: the full text confirms a strong LDA-search method with real credit/housing data and public code, but it is a stopping/certification tool rather than a debiasing technique, and its empirical validation is small-scale.</p>
+        
+      </td>
+      
+      <td>
+        
+          <span class="score s-high">8</span> <span class="subtle small">given triage 9</span>
+          <p style="margin-top:6px">Slightly below the 9 because the full text confirms a strong LDA-regulatory fit and released code, but the contribution is a stopping rule for random retraining rather than a debiasing technique, and the validation is small-scale and semi-synthetic.</p>
+        
+      </td>
+      
+      <td>
+        
+          <span class="score s-high">9</span> <span class="subtle small">given triage 9</span>
+          <p style="margin-top:6px">Matches the triage 9: the full text confirms a rigorous, LDA-specific method with released Python code and HMDA/credit experiments including XGBoost-style models, but it stops short of a 10 because it certifies search sufficiency over random retraining rather than offering a debiasing technique, and the empirical bounds are admittedly loose and tested only at small scale.</p>
+        
+      </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Summary</th>
+      
+      <td>This paper formalizes the legal concept of &#39;Less Discriminatory Algorithm&#39; (LDA) search as an optimal stopping problem. The authors develop an adaptive stopping algorithm with statistical guarantees that allows firms to certify when further model retraining is unlikely to yield meaningful disparate impact reductions. The approach decomposes the marginal gain into improvement probability and conditional expected improvement, providing high-probability upper bounds under various distributional assumptions. Empirical validation on credit and housing datasets shows the algorithm typically halts after modest retraining (tens of models), supporting the feasibility of demonstrating good-faith LDA search efforts.
+        <span class="wc">92 words (target ~100)</span>
+        </td>
+      
+      <td>The paper frames Less Discriminatory Algorithm (LDA) search under model multiplicity as an optimal stopping problem. It gives an adaptive stopping algorithm, built on anytime-valid inference, that yields a high-probability upper bound on the disparate-impact gain from training more models, so a developer can certify that further retraining is unlikely to help. Optional distributional assumptions give tighter bounds, and a data-driven variant estimates the conditional expected improvement. Experiments use Adult, Folktables and HMDA with logistic regression, random forests and gradient boosting, plus Fairlearn. They show that disparate impact varies far more than accuracy across retrained models, and that a few dozen models usually suffice.
+        <span class="wc">104 words (target ~100)</span>
+        </td>
+      
+      <td>Formalizes Less Discriminatory Alternative (LDA) search under model multiplicity as an optimal stopping problem. A developer repeatedly retrains models (random seeds, splits, hyperparameters, conditioned on meeting an accuracy threshold) and wants to certify when further search is no longer worth the cost. The marginal gain is decomposed into an improvement probability and a conditional expected improvement. The paper derives anytime-valid high-probability bounds on each, giving Algorithm 1, plus Algorithm 2, which estimates the conditional-improvement term from data. Tighter bounds are available under tail assumptions on the disparate-impact distribution. Experiments on Adult, Folktables and HMDA with logistic regression, random forests, GBTs and Fairlearn variants show the stopping rule overshoots the oracle stopping time by tens of models.
+        <span class="wc">116 words (target ~100)</span>
+        </td>
+      
+      <td>The authors formalize the search for less discriminatory algorithms (LDAs) under model multiplicity as an optimal stopping problem: a firm repeatedly retrains with different random seeds/splits, keeps the model with the lowest test-set selection-rate disparity, and needs to know when further retraining is unlikely to pay off. Algorithm 1 combines a universal bound on conditional expected improvement with a novel anytime-valid bound on the probability of beating the running minimum (Lemma 3.2), yielding a high-probability certificate that the expected marginal disparate-impact gain from one more model is below a cost threshold γ. Tighter bounds follow from distributional assumptions (Table 1); Algorithm 2 estimates the CEI from data. Experiments on Adult, Folktables, and HMDA with logistic regression, random forests, gradient boosted trees, and Fairlearn wrappers show marginal gains fall to hundredths of a percent after ~60 models, with the bound overshooting the full-information stopping time by tens of models.
+        <span class="wc over">148 words (target ~100)</span>
+        </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Relevance</th>
+      
+      <td><ul><li>Directly addresses LDA Search, a core stated interest in fair lending and algorithmic fairness</li><li>Novel methodological contribution providing statistical guarantees for fairness certification</li><li>Grounded in real-world credit and housing domains with regulatory context (CFPB, HUD, FHFA)</li><li>Tackles debiasing through model multiplicity—finding equally performant but fairer models</li><li>Handles disparate impact measurement, a key fairness concept in your interests</li></ul>
+        <span class="wc">57 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Directly addresses LDA search and disparate impact in lending, housing and employment, with legal and regulator (CFPB, HUD) context.</li><li>Provides a concrete, usable stopping and certification procedure for a compliance team or court.</li><li>Tested on HMDA and standard ML models (logistic, RF, GBM), with code on GitHub.</li></ul>
+        <span class="wc">47 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Directly targets LDA search and the open regulatory question of how much search is enough, citing CFPB and HUD guidance and case law.</li><li>Provides a defensible statistical certificate of search sufficiency usable in compliance documentation.</li><li>Code is released at github.com/johnchrishays/lda.</li><li>Experiments use HMDA mortgage data and GBTs, and test compatibility with Fairlearn.</li></ul>
+        <span class="wc">52 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Directly operationalizes LDA Search &#39;good faith sufficiency&#39;—a named interest—with a court/regulator-facing statistical certificate, citing CFPB and HUD positions.</li><li>Covers logistic regression and gradient boosted trees on HMDA and credit data; composes with Fairlearn.</li><li>Code released (github.com/johnchrishays/lda); Lemma 3.2 is a reusable anytime-valid tool.</li><li>Discusses backing out a firm&#39;s implied cost from its stopping decision—useful for regulatory debate.</li></ul>
+        <span class="wc">57 words (target ~50)</span>
+        </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Limitations</th>
+      
+      <td><ul><li>Code availability mentioned (GitHub link) but not fully validated in review; reproducibility depends on repository maintenance</li><li>Experiments on public datasets (Adult, Folktables, HMDA) with relatively small sample sizes (3000 points); authors acknowledge results may not reflect real industry settings with millions of observations and thousands of features</li><li>Theoretical guarantees are high-probability bounds, not certifications; still requires cost-benefit specification (γ) which remains a subjective legal/business parameter</li><li>Limited to disparate impact metric; framework doesn&#39;t extend to other fairness notions (e.g., calibration, equalized odds) without redesign</li><li>Does not address adaptive model development (where prior models inform future training), only iid retraining</li></ul>
+        <span class="wc over">98 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>It certifies search sufficiency rather than debiasing; it only exploits random-seed multiplicity and does not generate less discriminatory models.</li><li>Experiments use small public datasets (3,000 samples) and simplified features, so results may not carry over to industry credit data.</li><li>Bounds are conservative, overshooting the ideal stopping time by tens of models.</li><li>Needs a pre-specified cost/benefit ratio γ and untestable assumptions (selection effect).</li><li>Demographic imputation is not addressed.</li></ul>
+        <span class="wc over">67 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Not a debiasing method: it only governs when to stop random retraining, the weakest form of LDA search.</li><li>Experiments use 3,000-row subsamples, far smaller than industry credit data, which the authors flag.</li><li>Assumes iid, non-adaptive sampling, so it does not cover guided or optimization-based LDA searches.</li><li>Requires a pre-specified cost/benefit ratio γ, which is legally unsettled.</li><li>The data-driven variant (Algorithm 2) gave no improvement empirically.</li></ul>
+        <span class="wc">65 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Addresses only the seed/split-retraining dimension of LDA search, not feature, hyperparameter, or constraint-based alternatives; a stopping rule rather than a debiasing method.</li><li>Universal bound is loose (overshoots by tens of models, worse for logistic regression and HMDA); Algorithm 2&#39;s data-driven bound did not improve on it.</li><li>Experiments use 3,000-row subsamples; authors concede results may not transfer to industry credit datasets with millions of rows where retraining variance is lower and cost γ higher.</li><li>Requires the firm to set γ (cost of retraining vs. value of DI reduction), which is left unresolved.</li><li>Assumes iid retraining; adaptive/sequential search strategies are out of scope.</li></ul>
+        <span class="wc over">101 words (target ~50)</span>
+        </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Affiliations</th>
+      
+      <td>MIT · Cornell University · Microsoft Research</td>
+      
+      <td>MIT · Cornell University · Microsoft Research</td>
+      
+      <td>MIT · Cornell University · Microsoft Research</td>
+      
+      <td>MIT · Cornell University · Microsoft Research</td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Tokens, cost<br>and time</th>
+      
+      <td class="small">
+        Triage #1: 1,118 in / 147 out · $0.0019 · 2s<br>Triage #2: 1,118 in / 125 out · $0.0017 · 2s<br>Triage #3: 1,118 in / 102 out · $0.0016 · 2s<br>
+        Deep read: 16,642 in / 584 out · $0.0196 · 8s
+      </td>
+      
+      <td class="small">
+        Triage #1: 1,574 in / 163 out · $0.0048 · 4s<br>Triage #2: 1,574 in / 147 out · $0.0046 · 3s<br>Triage #3: 1,574 in / 127 out · $0.0044 · 3s<br>
+        Deep read: 22,088 in / 648 out · $0.0507 · 6s
+      </td>
+      
+      <td class="small">
+        Triage #1: 1,574 in / 156 out · $0.0094 · 3s<br>Triage #2: 1,574 in / 156 out · $0.0094 · 3s<br>Triage #3: 1,574 in / 155 out · $0.0094 · 3s<br>
+        Deep read: 22,081 in / 721 out · $0.1027 · 9s
+      </td>
+      
+      <td class="small">
+        Triage #1: 1,574 in / 146 out · $0.0230 · 5s<br>Triage #2: 1,574 in / 155 out · $0.0235 · 6s<br>Triage #3: 1,574 in / 191 out · $0.0253 · 8s<br>
+        Deep read: 22,069 in / 1,216 out · $0.2815 · 20s
+      </td>
+      
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="p-2504.21259">STRATA: A Name-and-Geography Race Inference Model for Fair Lending and Housing Equity Applications</h2>
+<p class="subtle small"><a href="http://arxiv.org/abs/2504.21259v2">2504.21259v2</a>
+  · 78,677 characters of paper text, identical for every model
+  (sha256 cd1fc0e705f4)</p>
+<div class="table-wrap">
+<table class="narrative">
+  <thead>
+    <tr><th></th><th>Haiku 4.5</th><th>Sonnet 5.5</th><th>Opus 5.5</th><th>Fable 5.1</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th scope="row">Triage</th>
+      
+      
+      <td>
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">9</span> 
+        
+          <p style="margin-top:6px">This paper directly addresses demographic imputation methods (BISG), a key stated interest, and tackles fair lending compliance in housing equity with a novel machine learning debiasing approach. The work improves upon existing methods by reducing socioeconomically correlated bias, uses modern ML techniques (BiLSTM and XGBoost), provides validation results, and explicitly considers fairness implications in regulated contexts (ECOA, HMDA).</p>
+          <p class="subtle small">Matched interest: Demographic imputation methods (BISG, HMDA data) and fair lending in housing</p>
+          <details><summary>All 3 triage rationales</summary>
+            <p><strong>#1</strong>
+              <span class="score s-high">9</span> This paper directly addresses demographic imputation methods (BISG), a key stated interest, and tackles fair lending compliance in housing equity with a novel machine learning debiasing approach. The work improves upon existing methods by reducing socioeconomically correlated bias, uses modern ML techniques (BiLSTM and XGBoost), provides validation results, and explicitly considers fairness implications in regulated contexts (ECOA, HMDA).</p><p><strong>#2</strong>
+              <span class="score s-high">9</span> This paper directly addresses demographic imputation (BISG and alternatives), a stated core interest, with a novel technical contribution (STRATA combining LSTM and XGBoost) specifically designed for fair lending compliance under ECOA and HMDA. The work reduces systematic biases in race imputation that understate true disparities—directly supporting debiasing and fairness measurement goals. The technical depth (character-level LSTMs, ensemble methods), validation on real-world lending data, and explicit fair lending application make this highly responsive to multiple primary interests.</p><p><strong>#3</strong>
+              <span class="score s-high">9</span> This paper directly addresses demographic imputation (BISG, HMDA data) and fair lending compliance, two explicitly stated interests. It presents a novel technical methodology (Bidirectional LSTM + XGBoost) that improves upon existing approaches by reducing socioeconomically correlated bias, a key fairness concern. The work is highly relevant to credit/housing domains and includes concrete validation results, though it lacks explicit code examples.</p>
+          </details>
+        
+      </td>
+      
+      
+      <td>
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">9</span> 
+        
+          <p style="margin-top:6px">Directly addresses demographic imputation (BISG alternatives) for fair lending/HMDA compliance with a new ML method (BiLSTM + XGBoost) that reduces BISG&#39;s SES-linked misclassification bias, which hits several stated interests at once. Not a 10 because it&#39;s imputation rather than debiasing a credit model, and code availability is not mentioned.</p>
+          <p class="subtle small">Matched interest: Demographic imputation methods (BISG, HMDA data)</p>
+          <details><summary>All 3 triage rationales</summary>
+            <p><strong>#1</strong>
+              <span class="score s-high">9</span> Directly addresses demographic imputation (BISG alternatives) for fair lending/HMDA compliance with a new ML method (BiLSTM + XGBoost) that reduces BISG&#39;s SES-linked misclassification bias, which hits several stated interests at once. Not a 10 because it&#39;s imputation rather than debiasing a credit model, and code availability is not mentioned.</p><p><strong>#2</strong>
+              <span class="score s-high">9</span> Directly addresses demographic imputation (BISG alternatives) for fair lending/HMDA/ECOA compliance with a novel ML method (BiLSTM + XGBoost) that reduces the SES-correlated bias in BISG. Strongly matches the imputation and fair lending interests; the only reservation is that it is not a debiasing technique for credit models and code availability is not mentioned.</p><p><strong>#3</strong>
+              <span class="score s-high">9</span> Directly addresses demographic imputation (BISG alternatives) for fair lending/HMDA compliance, with a new ML method (BiLSTM + XGBoost) that reduces BISG&#39;s SES-linked misclassification bias. It is a strong match on technical methods and fair lending; the only uncertainty is whether code is provided and that it targets measurement rather than model debiasing.</p>
+          </details>
+        
+      </td>
+      
+      
+      <td>
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">8</span> 
+        
+          <p style="margin-top:6px">Directly addresses demographic imputation for fair lending compliance (BISG alternatives, HMDA missing race), with a technical ML method (BiLSTM + XGBoost) that reduces socioeconomically correlated misclassification bias affecting disparity measurement. It is highly central to a stated interest, though it is not a debiasing method and the abstract mentions no code.</p>
+          <p class="subtle small">Matched interest: Demographic imputation methods (BISG, HMDA data) for fair lending</p>
+          <details><summary>All 3 triage rationales</summary>
+            <p><strong>#1</strong>
+              <span class="score s-high">9</span> Directly addresses demographic imputation for fair lending compliance (BISG alternatives, HMDA missing race), with a technical ML method (BiLSTM + XGBoost) that reduces socioeconomically correlated misclassification bias affecting disparity measurement. It is highly central to a stated interest, though it is not a debiasing method and the abstract mentions no code.</p><p><strong>#2</strong>
+              <span class="score s-high">9</span> Directly addresses demographic imputation for fair lending (BISG alternatives, HMDA/ECOA context) with a technical ML method (BiLSTM + XGBoost) and addresses BISG&#39;s socioeconomically correlated bias that understates disparities. This is central to disparate impact testing, though it is not a debiasing method per se and code availability is unclear.</p><p><strong>#3</strong>
+              <span class="score s-high">8</span> This is a technical ML method (BiLSTM + XGBoost) for race/ethnicity imputation that directly addresses BISG&#39;s bias, which leads to understated disparities in fair lending analysis. It is squarely in the stated demographic imputation interest (BISG, HMDA) and is applicable to credit compliance. It is not a debiasing method itself, and no code is mentioned.</p>
+          </details>
+        
+      </td>
+      
+      
+      <td>
+        <span class="score s-high">9</span> <span class="score s-high">9</span> <span class="score s-high">9</span> 
+        
+          <p style="margin-top:6px">Directly targets demographic imputation for fair lending (BISG improvement with LSTM+XGBoost), explicitly addressing socioeconomic misclassification bias that understates disparities, with technical ML methods and HMDA/ECOA context; only lacks explicit mention of code release.</p>
+          <p class="subtle small">Matched interest: demographic imputation methods (BISG, HMDA data) for fair lending</p>
+          <details><summary>All 3 triage rationales</summary>
+            <p><strong>#1</strong>
+              <span class="score s-high">9</span> Directly targets demographic imputation for fair lending (BISG improvement with LSTM+XGBoost), explicitly addressing socioeconomic misclassification bias that understates disparities, with technical ML methods and HMDA/ECOA context; only lacks explicit mention of code release.</p><p><strong>#2</strong>
+              <span class="score s-high">9</span> Directly targets demographic imputation for fair lending compliance (BISG alternative) with a technical ML method (BiLSTM + XGBoost), explicitly addressing BISG&#39;s socioeconomic misclassification bias that understates disparities—squarely in the researcher&#39;s stated interests. Falls just short of 10 only because it is not a debiasing technique per se and code availability is not mentioned.</p><p><strong>#3</strong>
+              <span class="score s-high">9</span> Directly addresses demographic imputation for fair lending (BISG improvement) with a technical ML method (BiLSTM + XGBoost), evaluated against BISG/BIFSG/ZRP on voter and PPP loan data, and explicitly framed around ECOA/HMDA compliance. Central to the researcher&#39;s stated interest in demographic imputation methods, though no mention of released code.</p>
+          </details>
+        
+      </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Deep-read score</th>
+      
+      <td>
+        
+          <span class="score s-high">8</span> <span class="subtle small">given triage 9</span>
+          <p style="margin-top:6px">Score aligns with initial 9/10: the paper delivers on all major stated interests (demographic imputation, debiasing methodology, fair lending, explainability via ablations, technical ML contribution) and provides production-ready code, but the withheld training code and commercial licensing, combined with demonstrated geographic/demographic limitations and in-source PPP validation, prevent a perfect 10—practical deployment still faces friction.</p>
+        
+      </td>
+      
+      <td>
+        
+          <span class="score s-high">8</span> <span class="subtle small">given triage 9</span>
+          <p style="margin-top:6px">Slightly lower than the triage 9: the paper confirms strong topical fit, but the code is evaluation-only with proprietary training and weights, and it is imputation rather than debiasing a credit model.</p>
+        
+      </td>
+      
+      <td>
+        
+          <span class="score s-high">8</span> <span class="subtle small">given triage 9</span>
+          <p style="margin-top:6px">Slightly below the initial 9: the full text confirms strong technical relevance to demographic imputation for fair lending, but the withheld training code and weights, and the commercial-only inference, limit hands-on usefulness for a practitioner who wants Python examples.</p>
+        
+      </td>
+      
+      <td>
+        
+          <span class="score s-high">8</span> <span class="subtle small">given triage 9</span>
+          <p style="margin-top:6px">Slightly below the initial 9 because the full text reveals training code, weights, and corpus are withheld and inference is gated behind a commercial AWS Marketplace license, so practitioners cannot build on or audit the model itself—though the method, evaluation design, and BISG comparison remain highly responsive to the researcher&#39;s demographic-imputation interest.</p>
+        
+      </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Summary</th>
+      
+      <td>STRATA is a BiLSTM+XGBoost ensemble for race/ethnicity imputation from names and Census geography, designed for fair-lending and housing-equity compliance where self-reported race is missing. On 981k voter holdouts, it achieves 88.8% accuracy and reduces White False Positive Rate (misclassifying minorities as White) from 28.0% (BISG) to 17.8%, the lowest among evaluated methods. National PPP validation spans all 50 states at 88.5% accuracy. The method uses only names and 13 public Census features, making it deployable across lending domains unlike voter-file-dependent baselines.
+        <span class="wc">81 words (target ~100)</span>
+        </td>
+      
+      <td>STRATA is a race/ethnicity imputation model for fair lending and housing analyses where self-reported demographics are missing. It combines a 4-layer character-level BiLSTM over names with 13 public Census block-group and tract features, then post-filters with a stacked XGBoost. It is trained on FL/GA/NC voter files plus the national PPP loan file. On a 981k voter holdout it lowers White FPR (non-White predicted as White) from 28.0% (BISG) to 17.8% at 88.8% accuracy and 100% coverage. On a national PPP cohort it reaches 88.5% accuracy and 9.81% White FPR. Summed-probability aggregation recovers group shares and a PPP disparity gap better than hard labels. Intended for aggregate use only.
+        <span class="wc">108 words (target ~100)</span>
+        </td>
+      
+      <td>STRATA is a race/ethnicity imputation model for aggregate fair-lending and housing disparity analysis. It concatenates character-level first/middle/last-name BiLSTM representations with 13 public Census block-group/tract features (race composition, income deciles, population). It is trained with a marginalized cross-entropy loss that handles labels conflated by the source, then post-filtered by an out-of-fold stacked XGBoost ensemble. The training data are FL/GA/NC voter files plus PPP loans. On a 981K voter holdout it beats BISG, BIFSG, ZRP, and Argyle &amp; Barber. The White FPR, the rate at which non-White individuals are labeled White, falls from 28.0% under BISG to 17.8%, with 88.8% accuracy and full coverage. On held-out national PPP records it reaches 88.5% accuracy. The paper also shows that probability-weighted aggregation recovers group shares and a downstream disparity better than hard labels.
+        <span class="wc">129 words (target ~100)</span>
+        </td>
+      
+      <td>STRATA is a race/ethnicity proxy model for fair-lending audits that replaces BISG&#39;s fixed Bayesian factorization with a 4-layer character-level BiLSTM over first/middle/last names concatenated with 13 public Census block-group/tract features, post-filtered by a 5-fold XGBoost stacker trained on out-of-fold probabilities. Trained on FL/GA/NC voter files plus the national PPP loan file (~19.7M records), it uses a marginalized cross-entropy loss to handle conflated source labels. On a 981k voter holdout it cuts White FPR (non-White misclassified as White) from 28.0% (BISG) to 17.8% at 88.8% accuracy with 100% coverage; on a national PPP holdout, 88.5% accuracy and 9.8% White FPR. Summed-probability aggregation recovers group shares within 0.5pp and reproduces a downstream disparity gap more faithfully than hard labels or BISG.
+        <span class="wc">119 words (target ~100)</span>
+        </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Relevance</th>
+      
+      <td><ul><li>Directly addresses demographic imputation (BISG improvement), a core stated interest</li><li>Proposes novel debiasing approach (learned name–geography interaction vs. fixed Bayesian factorization) reducing SES-correlated misclassification bias</li><li>Demonstrates fairness improvement for regulated fair-lending compliance (ECOA, HMDA contexts)</li><li>Includes code/artifacts for reproducibility and evaluation</li><li>Tackles measurement bias in disparity estimation, a sophisticated fairness concern</li></ul>
+        <span class="wc">51 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Direct BISG alternative for demographic imputation in fair lending/HMDA, which is a core interest.</li><li>Targets the SES-correlated misclassification that biases disparity measurement downward.</li><li>Technical ML content (BiLSTM, marginalized loss, OOF-stacked XGBoost) plus a probability-weighted disparity estimator for aggregate fairness testing.</li></ul>
+        <span class="wc">40 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Directly targets BISG alternatives for imputing race where HMDA or other records lack it, including the CFPB-used method.</li><li>Focuses on majority-class absorption, which shrinks measured disparities.</li><li>Gives practical guidance: aggregate with summed probabilities rather than hard labels when estimating disparities.</li><li>Includes income-stratified error analysis and per-class confusion and recall tables.</li><li>Benchmarks head-to-head against ZRP and Argyle &amp; Barber.</li></ul>
+        <span class="wc">58 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Directly addresses demographic imputation (BISG/BIFSG/ZRP alternatives) for HMDA/ECOA disparity testing where race is undisclosed.</li><li>Documents how CFPB-used BISG&#39;s SES-correlated errors shrink measured disparities toward the majority, and quantifies improvement.</li><li>Concrete ML architecture (BiLSTM + XGBoost stacking, custom loss, fixed hyperparameters) plus probability-weighted disparity estimator applicable to lending audits.</li></ul>
+        <span class="wc">48 words (target ~50)</span>
+        </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Limitations</th>
+      
+      <td><ul><li>Proprietary trained weights and training code withheld; reproducible inference only, not retraining</li><li>Trained on voter-registration and PPP data; transferability to other lending/housing domains assumed but not rigorously tested on mortgage/HMDA records</li><li>No individual-level decision capability; aggregate use only limits scope</li><li>Poor recovery of marginalized groups (AIAN 3.4% recall, NHPI 3.8%), collapsing meaningful heterogeneity</li><li>Geographic performance varies dramatically (Hawaii 69.5% accuracy vs. 95%+ elsewhere), limiting national deployment confidence</li></ul>
+        <span class="wc over">67 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Training code and weights are proprietary; the release has only evaluation scripts and predictions, so the model can&#39;t be retrained. Inference is via a commercial AWS Marketplace EULA.</li><li>Authors are the vendor, which is a commercial conflict of interest.</li><li>Weak on Other, AIAN and NHPI (recall under 6%); PPP test is in-source; the voter-trained data skews regionally.</li><li>Aggregate use only; the downstream disparity demo is a single near-ceiling outcome.</li></ul>
+        <span class="wc over">69 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Training code and model weights are proprietary.</li><li>Inference is available only through a commercial AWS Marketplace endpoint, so you cannot retrain or adapt the model.</li><li>The public repo only re-scores archived predictions.</li><li>Authors have a commercial interest in the method.</li><li>The PPP validation is in-source, since PPP records were also used in training.</li><li>AIAN and NHPI recall is about 3–4%, and &#39;Other&#39; recall is 5.6%.</li><li>This is an imputation method, not a debiasing technique for credit models.</li></ul>
+        <span class="wc over">77 words (target ~50)</span>
+        </td>
+      
+      <td><ul><li>Training code and model weights are proprietary; released GitHub/Zenodo artifact covers only evaluation/plotting scripts and de-identified prediction files—no retraining possible.</li><li>Inference requires licensing via AWS Marketplace (aequumAI STRATA EULA); authors have a commercial interest.</li><li>Training corpus (race-labeled voter files) not redistributed; PPP validation is in-source, and &#39;Other&#39;/NHPI/AIAN recall is near-zero.</li></ul>
+        <span class="wc">50 words (target ~50)</span>
+        </td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Affiliations</th>
+      
+      <td>aequumAI LLC</td>
+      
+      <td>aequumAI LLC</td>
+      
+      <td>aequumAI LLC</td>
+      
+      <td>aequumAI LLC</td>
+      
+    </tr>
+    <tr>
+      <th scope="row">Tokens, cost<br>and time</th>
+      
+      <td class="small">
+        Triage #1: 1,243 in / 132 out · $0.0019 · 2s<br>Triage #2: 1,243 in / 160 out · $0.0020 · 2s<br>Triage #3: 1,243 in / 130 out · $0.0019 · 2s<br>
+        Deep read: 23,114 in / 516 out · $0.0257 · 8s
+      </td>
+      
+      <td class="small">
+        Triage #1: 1,712 in / 164 out · $0.0051 · 3s<br>Triage #2: 1,712 in / 172 out · $0.0051 · 2s<br>Triage #3: 1,712 in / 172 out · $0.0051 · 3s<br>
+        Deep read: 31,374 in / 660 out · $0.0693 · 7s
+      </td>
+      
+      <td class="small">
+        Triage #1: 1,712 in / 169 out · $0.0102 · 4s<br>Triage #2: 1,712 in / 166 out · $0.0102 · 4s<br>Triage #3: 1,712 in / 167 out · $0.0102 · 4s<br>
+        Deep read: 31,374 in / 778 out · $0.1411 · 11s
+      </td>
+      
+      <td class="small">
+        Triage #1: 1,712 in / 143 out · $0.0243 · 8s<br>Triage #2: 1,712 in / 176 out · $0.0259 · 6s<br>Triage #3: 1,712 in / 177 out · $0.0260 · 6s<br>
+        Deep read: 31,347 in / 1,085 out · $0.3677 · 17s
+      </td>
+      
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+<footer>
+  Generated 2026-10-01T19:53:45+00:00 from results.json · config b1ac7179651c
+  · interests 3adeca93f2d5 · triage max_tokens 16000
+</footer>
+</main>
+</body>
+</html>

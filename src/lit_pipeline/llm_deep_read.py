@@ -116,7 +116,9 @@ def deep_read_paper(
 
     result = message.parsed_output
     if result is None:
-        raise ValueError(f"Deep-read call for {candidate.arxiv_id} returned no parsed output")
+        raise ValueError(
+            f"Deep-read call for {candidate.arxiv_id} returned no parsed output (stop_reason={message.stop_reason})"
+        )
     # Defensive clamp -- the schema declares 0-10 bounds, but don't trust it blindly.
     result.score = max(0, min(10, result.score))
     result.summary = clean_escape_artifacts(result.summary)
