@@ -16,7 +16,9 @@ as the non-streaming `.parse()` path used for triage.
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 
 from anthropic import Anthropic
 
@@ -61,6 +63,31 @@ Be direct and specific -- avoid vague praise or generic critique."""
 
 MAX_TOKENS = 64000
 
+# The deep-read model sometimes escapes its own text a second time inside
+# the structured JSON, so after parsing a string still holds e.g. a literal
+# "—" instead of an em dash, or "\"" instead of a quote. That was ~1
+# in 5 deep reads as of 2026-10; triage and mid-summary (Haiku) never did.
+# The replacements below are the other forms seen in the sheet.
+_UNICODE_ESCAPE_RUN = re.compile(r"(?:\\u[0-9a-fA-F]{4})+")
+_ESCAPE_ARTIFACT_REPLACEMENTS = [
+    ('\\"', '"'),
+    ("\\--\\", "—"),  # e.g. "given \--\ feature-independent"
+    (" \\ ", " — "),  # a lone backslash standing in for a dash
+    ("\\-", "-"),
+    ("\\_", "_"),
+]
+
+
+def clean_escape_artifacts(text: str) -> str:
+    """Undo the model's double-escaping in one deep-read field (see above).
+    Also used to repair rows already stored with the artifacts."""
+    # json.loads decodes a whole run at once, so surrogate pairs (two
+    # \\uXXXX escapes for one emoji-range character) come out as one character.
+    text = _UNICODE_ESCAPE_RUN.sub(lambda m: json.loads(f'"{m.group(0)}"'), text)
+    for old, new in _ESCAPE_ARTIFACT_REPLACEMENTS:
+        text = text.replace(old, new)
+    return text
+
 
 def deep_read_paper(
     client: Anthropic,
@@ -92,6 +119,11 @@ def deep_read_paper(
         raise ValueError(f"Deep-read call for {candidate.arxiv_id} returned no parsed output")
     # Defensive clamp -- the schema declares 0-10 bounds, but don't trust it blindly.
     result.score = max(0, min(10, result.score))
+    result.summary = clean_escape_artifacts(result.summary)
+    result.score_rationale = clean_escape_artifacts(result.score_rationale)
+    result.relevance = [clean_escape_artifacts(s) for s in result.relevance]
+    result.limitations = [clean_escape_artifacts(s) for s in result.limitations]
+    result.author_affiliations = [clean_escape_artifacts(s) for s in result.author_affiliations]
     usage = LLMUsage(
         model=settings.model,
         input_tokens=message.usage.input_tokens,
