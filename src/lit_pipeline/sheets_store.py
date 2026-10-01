@@ -1,14 +1,17 @@
-"""Thin wrapper around gspread for the single `papers` sheet.
+"""Thin wrapper around gspread for the `papers` sheet (plus the one-cell
+`harvest_state` tab).
 
 Auth uses a Google Cloud *service account* -- a "robot" Google identity you
 create once and share your Sheet with (Editor access), so headless code
 (GitHub Actions) can read/write without an interactive browser login. See
 README.md for one-time setup steps.
 
-The `status` column is the pipeline's only checkpoint: a run can be
-interrupted at any point and simply re-run, because every stage reads
-`status` to figure out what's already done vs. still pending. See
-`load_papers_index()` and the status constants below.
+The `status` column is the per-paper checkpoint: a run can be interrupted
+at any point and simply re-run, because every stage reads `status` to
+figure out what's already done vs. still pending. See `load_papers_index()`
+and the status constants below. The only other state is the daily
+harvest's date checkpoint (`load_harvest_checkpoint`), which records how
+far ingest has gotten so a failed day is picked up by the next run.
 
 Everything lives in one tab -- triage, mid-summary, and deep-read results
 are all just columns on the same `papers` row, keyed by `arxiv_id`. This
@@ -25,7 +28,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 import gspread
@@ -163,6 +166,36 @@ def open_sheets(settings: GoogleSheetsSettings) -> gspread.Worksheet:
     client = get_client()
     spreadsheet = client.open_by_key(settings.sheet_id)
     return _get_or_create_worksheet(spreadsheet, settings.papers_tab, PAPERS_HEADERS)
+
+
+HARVEST_STATE_TAB = "harvest_state"
+HARVEST_STATE_HEADERS = ["last_harvested_until"]
+
+
+def _open_harvest_state(papers_ws: gspread.Worksheet) -> gspread.Worksheet:
+    return _get_or_create_worksheet(papers_ws.spreadsheet, HARVEST_STATE_TAB, HARVEST_STATE_HEADERS)
+
+
+def load_harvest_checkpoint(papers_ws: gspread.Worksheet) -> date | None:
+    """The last day the daily OAI-PMH harvest fully covered, or None if it
+    has never completed (or the cell was cleared by hand)."""
+    value = (_open_harvest_state(papers_ws).acell("A2").value or "").strip()
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        # Typing a date into the cell by hand lets Sheets reformat it (e.g.
+        # "9/28/2026"); entering it as text ('2026-09-28) avoids that.
+        raise RuntimeError(
+            f"{HARVEST_STATE_TAB}!A2 holds {value!r}, which isn't a YYYY-MM-DD date. "
+            "Fix it (enter it as text, e.g. '2026-09-28) or clear it to harvest the last max_age_days."
+        ) from None
+
+
+def save_harvest_checkpoint(papers_ws: gspread.Worksheet, harvested_until: date) -> None:
+    _open_harvest_state(papers_ws).update([[harvested_until.isoformat()]], "A2")
+    logger.info("Harvest checkpoint set to %s", harvested_until)
 
 
 def get_all_records(ws: gspread.Worksheet) -> list[dict]:

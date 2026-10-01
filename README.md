@@ -12,8 +12,9 @@ Retarget it to any topic by editing a few lines of free text.
 
 ## What it does
 
-1. **Search** — daily, arXiv is queried with a combined OR'd set of
-   keywords/phrases relevant to your interests.
+1. **Search** — daily, every new arXiv submission since the last run is
+   harvested from arXiv's OAI-PMH metadata feed and kept if its abstract
+   matches your keywords/phrases.
 2. **Triage** — every new paper's *abstract* gets a 0-10 relevance score
    and a one-line rationale from Claude Haiku (cheap, fast).
 3. **Route by score, into three tiers**:
@@ -40,14 +41,13 @@ Retarget it to any topic by editing a few lines of free text.
 
 ```
 GitHub Actions (daily cron)
-  -> lit-daily -> arXiv search -> Haiku triage (0-10)
+  -> lit-daily -> arXiv OAI-PMH harvest + keyword filter -> Haiku triage (0-10)
        score >= threshold                  -> Opus deep-read (full paper)  -> "Deep Dive" tier
        mid_threshold <= score < threshold  -> Haiku mid-summary (abstract) -> "Potentially Relevant" tier
        score < mid_threshold               -> nothing further              -> title-only tier
      -> all of it lands as columns on one Google Sheet row per paper
-
-GitHub Actions (weekly cron)
-  -> lit-weekly -> Google Sheet -> three-tier HTML digest -> Resend -> your inbox
+  -> Mondays only, after the above:
+     lit-weekly -> Google Sheet -> three-tier HTML digest -> Resend -> your inbox
 
 you, manually
   -> lit-backfill --start-date ... --end-date ... [--dry-run]
@@ -84,9 +84,12 @@ noticing what mattered:
   expensive deep-read phase using a live average pulled from your sheet's
   actual historical costs — so the estimate gets more accurate on its own
   as the pipeline runs, with zero maintenance.
-- **Crash-safe by construction.** There's no job queue, no checkpoint
-  file, no separate state store. A paper's `status` cell *is* the state
-  machine. Interrupt a run for any reason and just run it again.
+- **Crash-safe by construction.** There's no job queue and no separate
+  state store. A paper's `status` cell *is* the state machine. Interrupt
+  a run for any reason and just run it again. The only other state is a
+  single date in the sheet's `harvest_state` tab: the last day ingest
+  fully covered. The next run harvests from there, so a day arXiv is down
+  is caught up by the next run rather than lost.
 - **One sheet, one row per paper.** Triage results, mid-tier summaries,
   full deep-read critiques, every stage's token counts and cost — all of
   it lives as columns on the same row. Open the sheet and everything
@@ -333,12 +336,22 @@ publish date.
 
 ## Running in GitHub Actions
 
-`.github/workflows/daily.yml` and `weekly.yml` run on cron (UTC) and can
-also be triggered manually from the Actions tab (**Run workflow** button) --
-do this once after your first push to confirm secrets are wired up correctly
-before trusting the schedule. GitHub emails the repo owner automatically if
-a scheduled workflow run fails, which is sufficient alerting for a
-single-user project.
+`.github/workflows/daily.yml` runs on cron (13:00 UTC, though GitHub often
+starts scheduled runs hours late). On Mondays its last step also sends the
+weekly digest, so the email always follows that day's ingest. That step
+runs even if the pipeline step failed. `weekly.yml` has no schedule: it's
+there to send a digest by hand. Both can be triggered from the Actions tab
+(**Run workflow** button). Do this once after your first push to confirm
+secrets are wired up correctly before trusting the schedule. A manual
+daily run never sends the digest, even on a Monday. GitHub emails the repo
+owner automatically if a scheduled workflow run fails, which is sufficient
+alerting for a single-user project.
+
+Daily ingest uses arXiv's OAI-PMH interface rather than its search API.
+The search API is capacity-constrained and throttles per IP. GitHub's
+shared runner IPs were regularly refused (HTTP 429/406) on a run's very
+first request. Backfill and manual deep dives still use the search API.
+They're run by hand, so if arXiv refuses one, just run it again later.
 
 ## Cost
 

@@ -1,8 +1,21 @@
-"""Search arXiv for candidate papers and fetch their PDF bytes.
+"""Find candidate papers on arXiv and fetch their PDF bytes.
 
-The `arxiv` package wraps arXiv's free, keyless public API. `arxiv.Client`
-handles the courtesy rate limiting (a delay between API requests) and retries
-for us -- we never need a manual `time.sleep()` around search calls.
+Two ways in, for two different jobs:
+
+- `harvest_candidates` (the daily job) pulls every record arXiv touched in
+  a date window from its OAI-PMH interface, arXiv's designated channel for
+  routinely copying metadata, and keyword-filters them client-side.
+- `fetch_candidates` (backfill) and `fetch_by_ids` (manual deep dive) use
+  the search API via the `arxiv` package, whose `arxiv.Client` handles the
+  courtesy delay between requests and retries for us.
+
+The daily job moved off the search API because that API is
+capacity-constrained and throttles per IP at arXiv's CDN: GitHub's shared
+runner IPs regularly got a 429/406 on a run's very *first* request, no
+matter how politely the run itself behaved. OAI-PMH is served separately,
+with its own flow control (503 + Retry-After). The search API remains fine
+for the occasional hand-run backfill or deep dive, where a refusal just
+means trying again later.
 
 Note: as of arxiv==4.0.1, `Result` no longer has a `download_pdf()` helper
 (older versions did), so PDF bytes are fetched directly with httpx below.
@@ -13,8 +26,11 @@ from __future__ import annotations
 import logging
 import re
 import time
+import xml.etree.ElementTree as ET
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 
 import arxiv
 import httpx
@@ -58,15 +74,31 @@ def passes_keyword_filter(abstract: str, specific_keywords: list[str], broad_key
     return broad_hits >= BROAD_KEYWORD_MIN_HITS
 
 
+# Sent on every request we make directly with httpx (OAI-PMH and PDFs).
+USER_AGENT = "lit-pipeline/0.1 (personal research tracker)"
+
 # Be a polite client when hitting the PDF servers directly, same spirit as
 # the courtesy delay `arxiv.Client` applies to the search API.
 PDF_DOWNLOAD_DELAY_SECONDS = 2.0
 PDF_DOWNLOAD_TIMEOUT_SECONDS = 60.0
 PDF_DOWNLOAD_MAX_RETRIES = 3
 
-# arXiv's practical earliest coverage -- used as the lower bound when a
-# backfill only specifies `published_before`.
-EARLIEST_ARXIV_DATE = date(2007, 1, 1)
+OAI_PMH_BASE_URL = "https://oaipmh.arxiv.org/oai"
+OAI_NAMESPACES = {
+    "oai": "http://www.openarchives.org/OAI/2.0/",
+    "raw": "http://arxiv.org/OAI/arXivRaw/",
+}
+# arXiv's terms of use: no more than one request every three seconds, across
+# all of its APIs.
+OAI_REQUEST_DELAY_SECONDS = 3.0
+# A page is a few MB of XML, and arXiv can be slow to generate one.
+OAI_REQUEST_TIMEOUT_SECONDS = 120.0
+# OAI-PMH flow control: a 503 with Retry-After means "come back in N
+# seconds", which we honor -- up to this much total waiting per harvest,
+# after which the run fails and the next day's run picks the window back up
+# from the checkpoint.
+OAI_MAX_TOTAL_RETRY_WAIT_SECONDS = 300.0
+OAI_DEFAULT_RETRY_AFTER_SECONDS = 30.0
 
 
 @dataclass
@@ -143,55 +175,44 @@ def _format_arxiv_datetime(d: date, end_of_day: bool) -> str:
 
 def fetch_candidates(
     settings: ArxivSettings,
-    published_after: date | None = None,
-    published_before: date | None = None,
+    published_after: date,
+    published_before: date,
 ) -> list[PaperCandidate]:
-    """Search arXiv for `specific_keywords`/`broad_keywords` and return
-    distinct candidates that pass `passes_keyword_filter`.
+    """Search arXiv for `specific_keywords`/`broad_keywords` submitted in
+    [published_after, published_before] and return distinct candidates that
+    pass `passes_keyword_filter`. Used by backfill; the daily job uses
+    `harvest_candidates` instead (see the module docstring).
 
     The arXiv-side query ORs every keyword from both lists together --
     deliberately wider than the eventual match, since arXiv has no way to
     express "2 of these 4 broad keywords co-occur." That co-occurrence
     check happens client-side per result below.
 
-    With no date bounds (the daily job's call site), behaves as a trailing
-    window of `max_age_days` from now, filtered client-side.
-
-    With either bound given (backfill's call site), pushes an explicit
-    `submittedDate:[...]` range into the query so arXiv filters
-    server-side, with `max_results=None`. This is required, not just an
-    optimization: `arxiv.Search` sorts newest-first and caps results
-    server-side *before* any client-side filtering, so a small
-    `max_results` would never even surface months-old papers once more
-    than `max_results` newer papers exist for the query.
+    The date range goes into the query as an explicit `submittedDate:[...]`
+    clause so arXiv filters server-side, with `max_results=None`. This is
+    required, not just an optimization: `arxiv.Search` sorts newest-first
+    and caps results server-side *before* any client-side filtering, so a
+    `max_results` cap would never even surface the older papers in range
+    once more than that many newer papers exist for the query.
     """
     client = arxiv.Client(page_size=100, delay_seconds=3.0, num_retries=3)
 
-    ranged = published_after is not None or published_before is not None
-    if ranged:
-        after = published_after or EARLIEST_ARXIV_DATE
-        before = published_before or datetime.now(timezone.utc).date()
-        date_clause = (
-            f"submittedDate:[{_format_arxiv_datetime(after, end_of_day=False)}"
-            f" TO {_format_arxiv_datetime(before, end_of_day=True)}]"
-        )
-        after_dt = datetime(after.year, after.month, after.day, tzinfo=timezone.utc)
-        before_dt: datetime | None = datetime(before.year, before.month, before.day, 23, 59, 59, tzinfo=timezone.utc)
-        max_results = None
-    else:
-        date_clause = None
-        after_dt = datetime.now(timezone.utc) - timedelta(days=settings.max_age_days)
-        before_dt = None
-        max_results = settings.max_results_per_query
+    date_clause = (
+        f"submittedDate:[{_format_arxiv_datetime(published_after, end_of_day=False)}"
+        f" TO {_format_arxiv_datetime(published_before, end_of_day=True)}]"
+    )
+    after_dt = datetime(published_after.year, published_after.month, published_after.day, tzinfo=timezone.utc)
+    before_dt = datetime(
+        published_before.year, published_before.month, published_before.day, 23, 59, 59, tzinfo=timezone.utc
+    )
 
     # Parenthesize the keyword query before ANDing in the date clause -- a
     # bare `q1 OR q2 AND submittedDate:[...]` would bind incorrectly,
     # scoping the date range to only the last OR'd term.
     keyword_query = build_abs_query(settings.specific_keywords, settings.broad_keywords)
-    full_query = f"({keyword_query}) AND {date_clause}" if date_clause else keyword_query
     search = arxiv.Search(
-        query=full_query,
-        max_results=max_results,
+        query=f"({keyword_query}) AND {date_clause}",
+        max_results=None,
         sort_by=arxiv.SortCriterion.SubmittedDate,
         sort_order=arxiv.SortOrder.Descending,
     )
@@ -199,7 +220,7 @@ def fetch_candidates(
     seen: dict[str, PaperCandidate] = {}
     matched_raw = 0
     for result in client.results(search):
-        if before_dt is not None and result.published > before_dt:
+        if result.published > before_dt:
             # A stray too-new result doesn't mean everything scanned
             # after it is also out of range -- keep going.
             continue
@@ -218,6 +239,151 @@ def fetch_candidates(
     logger.info(
         "arXiv matched %d raw result(s); %d passed the keyword filter",
         matched_raw,
+        len(seen),
+    )
+    return list(seen.values())
+
+
+def _parse_retry_after(value: str | None) -> float:
+    """Retry-After is either a number of seconds or an HTTP date."""
+    if not value:
+        return OAI_DEFAULT_RETRY_AFTER_SECONDS
+    try:
+        return max(float(value), 0.0)
+    except ValueError:
+        pass
+    try:
+        return max((parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds(), 0.0)
+    except (TypeError, ValueError):
+        return OAI_DEFAULT_RETRY_AFTER_SECONDS
+
+
+def _oai_list_records_pages(from_date: date, until_date: date) -> Iterator[ET.Element]:
+    """Yield each parsed ListRecords page for [from_date, until_date],
+    following resumptionTokens until the list is exhausted."""
+    params: dict[str, str] = {
+        "verb": "ListRecords",
+        "metadataPrefix": "arXivRaw",
+        "from": from_date.isoformat(),
+        "until": until_date.isoformat(),
+    }
+    total_retry_wait = 0.0
+    last_request_at: float | None = None
+    with httpx.Client(
+        timeout=OAI_REQUEST_TIMEOUT_SECONDS,
+        follow_redirects=True,
+        headers={"User-Agent": USER_AGENT},
+    ) as client:
+        while True:
+            if last_request_at is not None:
+                remaining = OAI_REQUEST_DELAY_SECONDS - (time.monotonic() - last_request_at)
+                if remaining > 0:
+                    time.sleep(remaining)
+            response = client.get(OAI_PMH_BASE_URL, params=params)
+            last_request_at = time.monotonic()
+
+            if response.status_code == 503:
+                wait = _parse_retry_after(response.headers.get("Retry-After"))
+                if total_retry_wait + wait > OAI_MAX_TOTAL_RETRY_WAIT_SECONDS:
+                    response.raise_for_status()
+                logger.info("OAI-PMH asked us to wait %.0fs (503 Retry-After)", wait)
+                time.sleep(wait)
+                total_retry_wait += wait
+                continue
+            response.raise_for_status()
+
+            root = ET.fromstring(response.content)
+            error = root.find("oai:error", OAI_NAMESPACES)
+            if error is not None:
+                # A window with nothing in it (e.g. no announcement that day)
+                # is an "error" in OAI-PMH terms, but just an empty result to us.
+                if error.get("code") == "noRecordsMatch":
+                    return
+                raise RuntimeError(f"OAI-PMH error {error.get('code')}: {(error.text or '').strip()}")
+            yield root
+
+            token = root.find("oai:ListRecords/oai:resumptionToken", OAI_NAMESPACES)
+            if token is None or not (token.text or "").strip():
+                return
+            # Per the protocol, a follow-up request carries only the verb and the token.
+            params = {"verb": "ListRecords", "resumptionToken": token.text.strip()}
+
+
+def _collapse_whitespace(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _join_authors(raw_authors: str) -> str:
+    """arXivRaw gives authors as one free-text line, e.g. "A, B and C" or
+    "A and B". Normalize the final "and" to a comma so the sheet gets the
+    same comma-joined form `_candidate_from_result` produces."""
+    return re.sub(r",?\s+and\s+(?!.*\s+and\s+)", ", ", _collapse_whitespace(raw_authors))
+
+
+def harvest_candidates(settings: ArxivSettings, from_date: date, until_date: date) -> list[PaperCandidate]:
+    """Harvest every arXiv record changed in [from_date, until_date] (UTC,
+    inclusive) from OAI-PMH and return the new submissions among them that
+    pass `passes_keyword_filter`. Used by the daily job.
+
+    OAI-PMH selects by the date arXiv last changed a record, not by
+    submission date, so the window also returns new versions of old
+    papers. Those are dropped by first-version (v1) date: anything first
+    submitted more than `max_age_days` before `from_date` isn't new.
+    """
+    oldest_allowed = from_date - timedelta(days=settings.max_age_days)
+    seen: dict[str, PaperCandidate] = {}
+    raw_count = 0
+    new_count = 0
+    pages = 0
+    for page in _oai_list_records_pages(from_date, until_date):
+        pages += 1
+        for record in page.iterfind("oai:ListRecords/oai:record", OAI_NAMESPACES):
+            header = record.find("oai:header", OAI_NAMESPACES)
+            if header is not None and header.get("status") == "deleted":
+                continue
+            meta = record.find("oai:metadata/raw:arXivRaw", OAI_NAMESPACES)
+            if meta is None:
+                continue
+            raw_count += 1
+
+            versions = meta.findall("raw:version", OAI_NAMESPACES)
+            v1_date_text = next(
+                (v.findtext("raw:date", namespaces=OAI_NAMESPACES) for v in versions if v.get("version") == "v1"),
+                None,
+            )
+            if not v1_date_text:
+                continue
+            published = parsedate_to_datetime(v1_date_text).astimezone(timezone.utc).date()
+            if published < oldest_allowed:
+                continue
+            new_count += 1
+
+            arxiv_id = meta.findtext("raw:id", default="", namespaces=OAI_NAMESPACES).strip()
+            abstract = _collapse_whitespace(meta.findtext("raw:abstract", default="", namespaces=OAI_NAMESPACES))
+            if not arxiv_id or arxiv_id in seen:
+                continue
+            if not passes_keyword_filter(abstract, settings.specific_keywords, settings.broad_keywords):
+                continue
+            # Link to the latest version, matching what the search API's
+            # entry_id gives `_candidate_from_result`.
+            latest = versions[-1].get("version", "") if versions else ""
+            seen[arxiv_id] = PaperCandidate(
+                arxiv_id=arxiv_id,
+                title=_collapse_whitespace(meta.findtext("raw:title", default="", namespaces=OAI_NAMESPACES)),
+                authors=_join_authors(meta.findtext("raw:authors", default="", namespaces=OAI_NAMESPACES)),
+                published_date=published.isoformat(),
+                abstract=abstract,
+                link=f"https://arxiv.org/abs/{arxiv_id}{latest}",
+                pdf_url=f"https://arxiv.org/pdf/{arxiv_id}{latest}",
+            )
+
+    logger.info(
+        "OAI-PMH harvest %s to %s: %d record(s) over %d page(s); %d new submission(s); %d passed the keyword filter",
+        from_date,
+        until_date,
+        raw_count,
+        pages,
+        new_count,
         len(seen),
     )
     return list(seen.values())
@@ -263,7 +429,7 @@ def download_pdf_bytes(pdf_url: str) -> bytes:
                 pdf_url,
                 timeout=PDF_DOWNLOAD_TIMEOUT_SECONDS,
                 follow_redirects=True,
-                headers={"User-Agent": "lit-pipeline/0.1 (personal research tracker)"},
+                headers={"User-Agent": USER_AGENT},
             )
             response.raise_for_status()
             return response.content

@@ -57,16 +57,12 @@ arxiv:
     - "bias"
     - "discrimination"
     - "credit"
-  # Max raw arXiv results pulled per DAILY run, before the keyword filter
-  # above is applied -- only used by the daily job (no date bounds);
-  # backfill runs fetch everything in the given range uncapped. Results are
-  # newest-first, so if raw matches in the trailing max_age_days window
-  # ever exceed this, the oldest ones in-window get silently dropped
-  # before the keyword filter even sees them -- keep this comfortably
-  # above the real raw match volume, not just above what you expect to
-  # actually qualify.
-  max_results_per_query: 200
-  # Ignore anything first submitted more than this many days ago.
+  # The daily job harvests every arXiv record changed since its last
+  # successful run, which includes new versions of old papers. Anything
+  # first submitted more than this many days before the harvest window
+  # starts is treated as old and skipped. Also how far back the very first
+  # harvest reaches (and any harvest after the sheet's harvest_state tab is
+  # cleared).
   max_age_days: 7
 
 triage:

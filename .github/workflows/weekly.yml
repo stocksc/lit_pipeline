@@ -1,9 +1,8 @@
 name: Weekly literature digest email
 
 on:
-  schedule:
-    # 13:00 UTC every Monday.
-    - cron: "0 13 * * 1"
+  # Manual only. The scheduled Monday send runs as the last step of
+  # daily.yml, so it always follows that day's ingest.
   workflow_dispatch: {}
 
 jobs:

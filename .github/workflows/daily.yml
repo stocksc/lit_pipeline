@@ -28,3 +28,23 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           REPORT_RECIPIENT_EMAIL: ${{ secrets.REPORT_RECIPIENT_EMAIL }}
         run: uv run lit-daily
+
+      # The weekly digest goes out from here, after Monday's ingest, rather
+      # than on its own cron: two separately scheduled workflows get delayed
+      # by different amounts, and the email used to go out before that day's
+      # papers were in. Runs even if the pipeline step failed, so a bad day
+      # doesn't swallow the whole week's email. Scheduled runs only -- a
+      # manual run on a Monday shouldn't send a second copy (weekly.yml's
+      # Run workflow button is the manual way to send one).
+      - name: Send weekly report (Mondays)
+        if: ${{ !cancelled() && github.event_name == 'schedule' }}
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          REPORT_RECIPIENT_EMAIL: ${{ secrets.REPORT_RECIPIENT_EMAIL }}
+        run: |
+          if [ "$(date -u +%u)" = "1" ]; then
+            uv run lit-weekly
+          else
+            echo "Not Monday (UTC); skipping the weekly report."
+          fi

@@ -22,7 +22,6 @@ class ArxivSettings(BaseModel):
     # qualifies via this list if at least BROAD_KEYWORD_MIN_HITS of them
     # (see arxiv_client.py) appear together in the same abstract.
     broad_keywords: list[str]
-    max_results_per_query: int = 50
     max_age_days: int = 7
 
 
