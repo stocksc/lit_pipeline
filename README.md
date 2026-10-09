@@ -16,7 +16,7 @@ Retarget it to any topic by editing a few lines of free text.
    harvested from arXiv's OAI-PMH metadata feed and kept if its abstract
    matches your keywords/phrases.
 2. **Triage** — every new paper's *abstract* gets a 0-10 relevance score
-   and a one-line rationale from Claude Haiku (cheap, fast).
+   and a one-line rationale from Claude Opus.
 3. **Route by score, into three tiers**:
    - **Deep dive** (score ≥ threshold): the full paper is fetched, text-
      extracted, and critiqued by Claude Opus — a ~100-word summary, why
@@ -41,9 +41,9 @@ Retarget it to any topic by editing a few lines of free text.
 
 ```
 GitHub Actions (daily cron)
-  -> lit-daily -> arXiv OAI-PMH harvest + keyword filter -> Haiku triage (0-10)
+  -> lit-daily -> arXiv OAI-PMH harvest + keyword filter -> Opus triage (0-10)
        score >= threshold                  -> Opus deep-read (full paper)  -> "Deep Dive" tier
-       mid_threshold <= score < threshold  -> Haiku mid-summary (abstract) -> "Potentially Relevant" tier
+       mid_threshold <= score < threshold  -> Opus mid-summary (abstract)  -> "Potentially Relevant" tier
        score < mid_threshold               -> nothing further              -> title-only tier
      -> all of it lands as columns on one Google Sheet row per paper
   -> Mondays only, after the above:
@@ -63,7 +63,7 @@ noticing what mattered:
 
 - **Deep-read re-rates the paper, and a downgrade doesn't waste the
   work.** Once Opus has read the *whole* paper, that's a strictly
-  better-informed relevance judgment than Haiku's abstract-only guess —
+  better-informed relevance judgment than triage's abstract-only guess —
   so the deep-read score overwrites the triage score. If a paper's
   re-rated score drops out of the top tier, it doesn't just vanish: it
   reuses Opus's own summary in the mid-tier report instead of getting
@@ -240,7 +240,7 @@ already-processed papers are skipped, same as the daily job.
 
 `lit-deep-dive` is the manual override for the pipeline's own judgment. The
 daily job only deep-reads a paper if arXiv's keyword search surfaced it *and*
-Haiku scored it at/above your threshold; this forces named papers through
+triage scored it at/above your threshold; this forces named papers through
 triage and deep-read regardless of either. Useful when a colleague sends you
 something, when a paper you just read cites something worth a look, or when
 you simply disagree with the 3/10 the pipeline gave it.
@@ -355,10 +355,9 @@ They're run by hand, so if arXiv refuses one, just run it again later.
 
 ## Cost
 
-Deep-read (Opus, full paper) dominates the bill -- triage (Haiku, per
-abstract) and mid-summary (Haiku, per abstract) both run well under
-$0.01/paper regardless of paper length, since they only ever see the
-abstract.
+Deep-read (Opus, full paper) dominates the bill -- triage and
+mid-summary (also Opus, but per abstract) each run about $0.01/paper
+regardless of paper length, since they only ever see the abstract.
 
 Deep-read cost depends heavily on paper length, since the full extracted
 text goes to Opus. Extraction trims at the References heading (dropping

@@ -26,10 +26,10 @@ class ArxivSettings(BaseModel):
 
 
 class TriageSettings(BaseModel):
-    model: str = "claude-haiku-4-5"
+    model: str = "claude-opus-5-5"
     # Papers scoring >= this go on to deep-read (Opus, full paper).
     score_threshold: int = 7
-    # Papers scoring in [mid_summary_threshold, score_threshold) get a cheap
+    # Papers scoring in [mid_summary_threshold, score_threshold) get a
     # ~50-word summary generated from the abstract alone (same model as
     # triage, no PDF fetch). Below mid_summary_threshold, only the title
     # shows up in the report -- no further LLM calls.
@@ -37,7 +37,7 @@ class TriageSettings(BaseModel):
 
 
 class DeepReadSettings(BaseModel):
-    model: str = "claude-opus-5"
+    model: str = "claude-opus-5-5"
     # Safety-net cap on how many PDF pages get extracted, applied on top of
     # the references-heading cut in pdf_extract.py (which does the real
     # cost-saving work). Generous by design -- comfortably above any

@@ -1,4 +1,4 @@
-"""Cheap-model triage: score a paper's abstract for relevance.
+"""Triage: score a paper's abstract for relevance.
 
 Uses `client.messages.parse(..., output_format=TriageResult)`, which sends a
 JSON Schema derived from the Pydantic model and returns an already-validated
@@ -31,12 +31,12 @@ def triage_paper(
     settings: TriageSettings,
     interests: str,
     candidate: PaperCandidate,
-    max_tokens: int = 1024,
+    max_tokens: int = 16000,
 ) -> tuple[TriageResult, LLMUsage]:
-    """`max_tokens` caps thinking *and* the answer together. 1024 is ample
-    for Haiku, which doesn't think by default; a model that thinks by
-    default (Opus 5.x, Sonnet 5.x, Fable) needs far more headroom or its
-    answer gets cut off."""
+    """`max_tokens` caps thinking *and* the answer together. Opus 5.5 always
+    thinks, so this leaves it far more headroom than the ~150-200 output
+    tokens a triage call has actually used -- too tight a cap cuts the
+    answer off. (1024 was enough for Haiku, which doesn't think by default.)"""
     user_content = (
         f"Researcher's interests:\n{interests}\n\n"
         f"Paper title: {candidate.title}\n\n"

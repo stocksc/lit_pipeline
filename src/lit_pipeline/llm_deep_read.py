@@ -7,7 +7,7 @@ visuals aren't the point and the output is meant to be a compact
 click-through teaser, not a full review.
 
 Uses streaming (`client.messages.stream(...).get_final_message()`) rather
-than a plain `create`/`parse` call: Claude Opus 5's default adaptive
+than a plain `create`/`parse` call: Claude Opus 5.5's always-on adaptive
 thinking can still run for a while even on a short output, and streaming
 avoids HTTP timeouts on that kind of request. `output_format=DeepReadResult`
 still gives us a validated `DeepReadResult` on `message.parsed_output`, same

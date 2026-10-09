@@ -23,7 +23,7 @@ class ModelPricing:
 
 
 # USD per 1M tokens, checked against Anthropic's pricing page on 2026-10-01.
-# Only Haiku 4.5 and Opus 5 are used by the default config; the rest are
+# Only Opus 5.5 is used by the default config; the rest are
 # here for anyone who swaps a model in settings.yaml, and for the model
 # comparison in analysis/model_comparison/.
 PRICING: dict[str, ModelPricing] = {

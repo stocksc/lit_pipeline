@@ -50,7 +50,7 @@ PAPERS_HEADERS = [
     # an existing sheet by just adding trailing columns, not reordering.
     "mid_summary", "mid_summary_input_tokens", "mid_summary_output_tokens",
     "mid_summary_cost_usd", "mid_summary_at",
-    # The Haiku triage score, written once and never touched again --
+    # The abstract-only triage score, written once and never touched again --
     # `triage_score` itself gets overwritten with Opus's re-rating after a
     # deep-read, so this is the only place the original guess survives.
     "original_triage_score",

@@ -5,7 +5,7 @@ Entry point: `uv run lit-deep-dive 2501.12345 2502.09876`
 
 The daily job and backfills both decide for themselves which papers are worth
 Opus's time: a paper is only deep-read if arXiv's keyword search surfaced it
-*and* Haiku scored it at/above `triage.score_threshold`. This is the manual
+*and* triage scored it at/above `triage.score_threshold`. This is the manual
 override for when you already know a paper matters -- a colleague sent it to
 you, it's cited by something you just read, or the pipeline scored it 3 and
 you disagree.
@@ -200,7 +200,7 @@ def _split_reusable(
     is the obvious saving, but skipping the triage matters just as much for
     correctness: `triage_score` holds Opus's post-deep-read re-rating (see
     sheets_store.PAPERS_HEADERS), so re-triaging without re-reading would
-    overwrite that with a fresh abstract-only Haiku score and leave the
+    overwrite that with a fresh abstract-only triage score and leave the
     stored deep-read summary sitting next to a rating that didn't come from
     reading the paper.
 

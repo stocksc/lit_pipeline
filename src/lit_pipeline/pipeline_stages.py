@@ -229,7 +229,7 @@ def run_deep_read_stage(
         try:
             pdf_bytes = download_pdf_bytes(candidate.pdf_url)
             pdf_text = pdf_extract.extract_pdf_text(pdf_bytes, max_pages=settings.deep_read.max_pdf_pages)
-            # row.triage_score is still Haiku's untouched original here -- this
+            # row.triage_score is still triage's untouched original here -- this
             # call's own result is what overwrites it, below, once we have it.
             result, usage = deep_read_paper(
                 client,

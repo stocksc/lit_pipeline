@@ -1,10 +1,10 @@
-"""Cheap-model summary for mid-tier papers.
+"""Abstract-only summary for mid-tier papers.
 
 Papers scoring in [mid_summary_threshold, score_threshold) don't clear the
 bar for a full Opus deep-read, but are relevant enough to show more than
 just a title. This generates a ~50-word summary from the abstract alone
-(no PDF fetch) using the same model as triage -- cheap and fast, since the
-abstract is already in hand from ingestion.
+(no PDF fetch) using the same model as triage -- cheap, since the abstract
+is already in hand from ingestion.
 """
 
 from __future__ import annotations
@@ -40,7 +40,8 @@ def mid_summary_paper(
     )
     response = client.messages.parse(
         model=settings.model,
-        max_tokens=1024,
+        # Caps thinking and the answer together -- see llm_triage.triage_paper.
+        max_tokens=16000,
         system=MID_SUMMARY_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
         output_format=MidSummaryResult,

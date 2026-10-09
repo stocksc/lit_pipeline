@@ -80,7 +80,7 @@ MODEL_NOTES = {
 }
 
 TRIAGE_REPEATS = 3
-# Production's 1024 is sized for Haiku; thinking models need room to think
+# Production's cap was 1024 when this ran, sized for Haiku; thinking models need room to think
 # before answering (max_tokens caps thinking + answer together).
 TRIAGE_MAX_TOKENS = 16000
 
