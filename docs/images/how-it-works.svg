@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 760" width="880" height="760" role="img" aria-labelledby="title desc">
+  <title id="title">How lit_pipeline works</title>
+  <desc id="desc">Every day, new arXiv records pass a keyword filter and Claude triages each abstract on a 0 to 10 scale. Papers scoring 7 to 10 get a full-paper deep read, 4 to 6 a short summary of the abstract, and 0 to 3 just their title and score. Everything is stored in a Google Sheet, one row per paper. On Mondays a digest is built from the sheet and emailed with Resend.</desc>
+  <style>
+    .bg { fill: #ffffff; }
+    .cluster { fill: #f6f8fa; stroke: #d0d7de; stroke-width: 1; }
+    .node { fill: #ffffff; stroke: #afb8c1; stroke-width: 1.5; }
+    .claude { fill: #eef4ff; stroke: #1d4ed8; stroke-width: 1.75; }
+    .ghost { fill: #ffffff; stroke: #afb8c1; stroke-width: 1.25; stroke-dasharray: 5 4; }
+    .sheet { fill: #ecfdf3; stroke: #15803d; stroke-width: 1.75; }
+    .wire { fill: none; stroke: #8c959f; stroke-width: 1.5; }
+    .head { fill: #8c959f; }
+    .pill { fill: #ffffff; stroke: #d0d7de; stroke-width: 1; }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .t { font-size: 15px; font-weight: 600; fill: #1f2328; }
+    .s { font-size: 13px; fill: #59636e; }
+    .lane { font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; fill: #59636e; }
+    .edge { font-size: 12px; font-weight: 600; fill: #59636e; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .cluster { fill: #151b23; stroke: #3d444d; }
+      .node, .ghost { fill: #0d1117; stroke: #656c76; }
+      .claude { fill: #0f1f3d; stroke: #4493f8; }
+      .sheet { fill: #0f2419; stroke: #3fb950; }
+      .wire { stroke: #7d8590; }
+      .head { fill: #7d8590; }
+      .pill { fill: #0d1117; stroke: #3d444d; }
+      .t { fill: #f0f6fc; }
+      .s, .lane, .edge { fill: #9198a1; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="head"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="880" height="760" rx="16"/>
+
+  <!-- Daily run -->
+  <rect class="cluster" x="20" y="20" width="840" height="452" rx="14"/>
+  <text class="lane" x="40" y="48">EVERY DAY · GITHUB ACTIONS</text>
+  <rect class="claude" x="716" y="36" width="14" height="14" rx="3"/>
+  <text class="s" x="738" y="48">Claude call</text>
+
+  <rect class="node" x="280" y="64" width="320" height="56" rx="10"/>
+  <text class="t" x="440" y="88" text-anchor="middle">arXiv metadata feed</text>
+  <text class="s" x="440" y="107" text-anchor="middle">everything new since the last run</text>
+
+  <line class="wire" x1="440" y1="120" x2="440" y2="150" marker-end="url(#arrow)"/>
+
+  <rect class="node" x="310" y="152" width="260" height="56" rx="10"/>
+  <text class="t" x="440" y="176" text-anchor="middle">Keyword filter</text>
+  <text class="s" x="440" y="195" text-anchor="middle">one phrase, or two broad words</text>
+
+  <line class="wire" x1="570" y1="180" x2="668" y2="180" marker-end="url(#arrow)"/>
+  <text class="edge" x="619" y="172" text-anchor="middle">no match</text>
+  <rect class="ghost" x="670" y="158" width="150" height="44" rx="10"/>
+  <text class="s" x="745" y="185" text-anchor="middle">skipped</text>
+
+  <line class="wire" x1="440" y1="208" x2="440" y2="240" marker-end="url(#arrow)"/>
+  <text class="edge" x="450" y="229">match</text>
+
+  <rect class="claude" x="260" y="242" width="360" height="60" rx="10"/>
+  <text class="t" x="440" y="267" text-anchor="middle">Triage</text>
+  <text class="s" x="440" y="287" text-anchor="middle">Claude scores the abstract 0–10  ·  ~1¢</text>
+
+  <path class="wire" d="M440 302 V330 H170 V368" marker-end="url(#arrow)"/>
+  <path class="wire" d="M440 302 V368" marker-end="url(#arrow)"/>
+  <path class="wire" d="M440 330 H710 V368" marker-end="url(#arrow)"/>
+  <rect class="pill" x="138" y="339" width="64" height="20" rx="10"/>
+  <text class="edge" x="170" y="353" text-anchor="middle">7–10</text>
+  <rect class="pill" x="413" y="339" width="54" height="20" rx="10"/>
+  <text class="edge" x="440" y="353" text-anchor="middle">4–6</text>
+  <rect class="pill" x="683" y="339" width="54" height="20" rx="10"/>
+  <text class="edge" x="710" y="353" text-anchor="middle">0–3</text>
+
+  <rect class="claude" x="40" y="370" width="260" height="78" rx="10"/>
+  <text class="t" x="170" y="396" text-anchor="middle">Deep read</text>
+  <text class="s" x="170" y="416" text-anchor="middle">Claude reads the full paper</text>
+  <text class="s" x="170" y="434" text-anchor="middle">and re-scores it  ·  ~11¢</text>
+
+  <rect class="claude" x="320" y="370" width="240" height="78" rx="10"/>
+  <text class="t" x="440" y="396" text-anchor="middle">Mid summary</text>
+  <text class="s" x="440" y="416" text-anchor="middle">~50 words from the abstract</text>
+  <text class="s" x="440" y="434" text-anchor="middle">no PDF download  ·  ~1¢</text>
+
+  <rect class="ghost" x="580" y="370" width="260" height="78" rx="10"/>
+  <text class="t" x="710" y="403" text-anchor="middle">Title and score only</text>
+  <text class="s" x="710" y="423" text-anchor="middle">no further model calls</text>
+
+  <!-- Into the sheet -->
+  <path class="wire" d="M170 448 V490 H440"/>
+  <path class="wire" d="M710 448 V490 H440"/>
+  <path class="wire" d="M440 448 V510" marker-end="url(#arrow)"/>
+
+  <path class="sheet" d="M320 524 V584 A120 12 0 0 0 560 584 V524"/>
+  <ellipse class="sheet" cx="440" cy="524" rx="120" ry="12"/>
+  <text class="t" x="440" y="558" text-anchor="middle">Google Sheet</text>
+  <text class="s" x="440" y="577" text-anchor="middle">one row per paper</text>
+
+  <!-- Weekly digest -->
+  <rect class="cluster" x="20" y="612" width="840" height="128" rx="14"/>
+  <text class="lane" x="40" y="640">MONDAYS</text>
+  <line class="wire" x1="440" y1="596" x2="440" y2="650" marker-end="url(#arrow)"/>
+
+  <rect class="node" x="300" y="652" width="280" height="60" rx="10"/>
+  <text class="t" x="440" y="677" text-anchor="middle">Weekly digest</text>
+  <text class="s" x="440" y="696" text-anchor="middle">built from the sheet, no model calls</text>
+
+  <line class="wire" x1="580" y1="682" x2="628" y2="682" marker-end="url(#arrow)"/>
+
+  <rect class="node" x="630" y="652" width="190" height="60" rx="10"/>
+  <text class="t" x="725" y="677" text-anchor="middle">Email</text>
+  <text class="s" x="725" y="696" text-anchor="middle">sent with Resend</text>
+</svg>
