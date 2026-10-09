@@ -163,6 +163,7 @@ gets deep-read until the full command runs.
 | `--query "..."` | Search these phrases instead of `arxiv.specific_keywords` (repeatable). |
 | `--threshold N` | Override the deep-read cutoff for this run. |
 | `--dry-run` | Stop after triage and mid summaries: no deep reads, no email. |
+| `--no-fetch` | Don't search arXiv; use the papers already in the sheet for the range. Handy for the full run after a dry run. |
 
 Backfills use arXiv's search API, which won't page past 10,000 results for
 one query. With the standing keyword lists, a month at a time stays well

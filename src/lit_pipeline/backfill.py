@@ -76,6 +76,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "projection for deep-read, and stop before deep-read/email"
         ),
     )
+    parser.add_argument(
+        "--no-fetch",
+        action="store_true",
+        help=(
+            "Don't search arXiv; work from the papers already in the sheet for this range -- "
+            "e.g. a full run after a --dry-run, or while arXiv's search API is refusing requests"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -98,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.end_date < args.start_date:
         raise SystemExit("--end-date must not be before --start-date")
+    if args.no_fetch and args.specific_keywords:
+        raise SystemExit("--query only changes the arXiv search, so it does nothing with --no-fetch")
 
     settings = load_settings()
     if args.specific_keywords:
@@ -108,13 +118,16 @@ def main(argv: list[str] | None = None) -> int:
     client = Anthropic()
     papers_ws = sheets_store.open_sheets(settings.google_sheets)
 
-    logger.info("Searching arXiv %s to %s...", args.start_date, args.end_date)
-    candidates = fetch_candidates(settings.arxiv, published_after=args.start_date, published_before=args.end_date)
-    logger.info("Found %d candidate(s) in range", len(candidates))
+    if args.no_fetch:
+        logger.info("Skipping the arXiv search; working from the papers already in the sheet")
+    else:
+        logger.info("Searching arXiv %s to %s...", args.start_date, args.end_date)
+        candidates = fetch_candidates(settings.arxiv, published_after=args.start_date, published_before=args.end_date)
+        logger.info("Found %d candidate(s) in range", len(candidates))
 
-    index = sheets_store.load_papers_index(papers_ws)
-    new_candidates = [c for c in candidates if c.arxiv_id not in index]
-    sheets_store.append_new_candidates(papers_ws, new_candidates, added_by=sheets_store.ADDED_BY_BACKFILL)
+        index = sheets_store.load_papers_index(papers_ws)
+        new_candidates = [c for c in candidates if c.arxiv_id not in index]
+        sheets_store.append_new_candidates(papers_ws, new_candidates, added_by=sheets_store.ADDED_BY_BACKFILL)
     index = sheets_store.load_papers_index(papers_ws)
 
     scoped_index = scope_to_published_range(index, args.start_date, args.end_date)
