@@ -150,7 +150,9 @@ The first command searches the window, triages and summarizes what it finds,
 then stops before any deep reads. It prints a score histogram and a
 projected cost for the deep reads. The second runs everything and emails a
 digest for that window. Re-running is safe, because finished papers are
-skipped, so a dry run can be followed by the real run at no extra cost.
+skipped, so a dry run can be followed by the real run at no extra cost. The
+daily job leaves papers a backfill added alone, so after a dry run nothing
+gets deep-read until the full command runs.
 
 | Flag | Effect |
 |---|---|

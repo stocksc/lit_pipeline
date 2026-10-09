@@ -78,11 +78,21 @@ PAPERS_HEADERS = [
     # match the keywords is left unflagged, because the daily job would have
     # picked it up and reported it anyway.
     "manual_only",
+    # Which command added the row: one of the ADDED_BY_* values below. The
+    # daily job only processes its own rows (see daily_owns), so a backfill
+    # or deep dive run with --dry-run leaves its high scorers waiting at
+    # `triaged` instead of having the next daily run deep-read them unasked.
+    # Blank on rows from before this column existed; those count as daily.
+    "added_by",
 ]
 
 # What gets written into the `manual_only` column. Any non-empty value counts
 # as flagged on read, so this is just for legibility in the sheet itself.
 MANUAL_ONLY_VALUE = "yes"
+
+ADDED_BY_DAILY = "daily"
+ADDED_BY_BACKFILL = "backfill"
+ADDED_BY_DEEP_DIVE = "deep_dive"
 
 # --- status lifecycle -------------------------------------------------
 # A triaged row's score routes it to exactly one of two further stages:
@@ -252,12 +262,21 @@ def load_papers_index(papers_ws: gspread.Worksheet) -> dict[str, PaperRow]:
     return index
 
 
+def daily_owns(row: PaperRow) -> bool:
+    """Whether the daily job should process this row -- see the `added_by`
+    header comment above."""
+    return (str(row.raw.get("added_by", "")).strip() or ADDED_BY_DAILY) == ADDED_BY_DAILY
+
+
 def append_new_candidates(
     papers_ws: gspread.Worksheet,
     candidates: list[PaperCandidate],
+    *,
+    added_by: str,
     manual_only: bool = False,
 ) -> None:
-    """Append papers the sheet has never seen. `manual_only=True` flags the
+    """Append papers the sheet has never seen. `added_by` records which
+    command added them (an ADDED_BY_* value). `manual_only=True` flags the
     whole batch as papers the standing keyword lists would never have
     surfaced, keeping them out of the scheduled reports (see the
     `manual_only` header comment above)."""
@@ -278,6 +297,7 @@ def append_new_candidates(
             ingested_at=now,
             retry_count=0,
             manual_only=MANUAL_ONLY_VALUE if manual_only else "",
+            added_by=added_by,
         )
         rows.append([row[h] for h in PAPERS_HEADERS])
     papers_ws.append_rows(rows, value_input_option="RAW")

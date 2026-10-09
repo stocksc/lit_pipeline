@@ -173,8 +173,9 @@ def _ingest_new_papers(papers_ws: Worksheet, settings: Settings, candidates: lis
         )
         (on_query if matched else off_query).append(candidate)
 
-    sheets_store.append_new_candidates(papers_ws, on_query)
-    sheets_store.append_new_candidates(papers_ws, off_query, manual_only=True)
+    added_by = sheets_store.ADDED_BY_DEEP_DIVE
+    sheets_store.append_new_candidates(papers_ws, on_query, added_by=added_by)
+    sheets_store.append_new_candidates(papers_ws, off_query, added_by=added_by, manual_only=True)
     if on_query:
         logger.info(
             "%d new paper(s) match your keyword lists, so they report as usual: %s",

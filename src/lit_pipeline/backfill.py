@@ -10,7 +10,10 @@ happens to run) -- see arxiv_client.fetch_candidates and reporting.py.
 Reuses the exact same triage/deep-read stage
 functions as the daily job (pipeline_stages.py), just handed a pre-filtered
 index so a backfill run never touches unrelated pending rows left over from
-regular daily runs.
+regular daily runs. It works the other way too: rows a backfill adds are
+marked `added_by=backfill`, and the daily job leaves them alone, so a
+--dry-run's high scorers wait for a full backfill run rather than being
+deep-read by the next daily run.
 
 Use --dry-run first for anything beyond a narrow window: deep-reading is a
 real per-paper Opus cost, and a broad query over a wide date range can
@@ -120,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
 
     index = sheets_store.load_papers_index(papers_ws)
     new_candidates = [c for c in candidates if c.arxiv_id not in index]
-    sheets_store.append_new_candidates(papers_ws, new_candidates)
+    sheets_store.append_new_candidates(papers_ws, new_candidates, added_by=sheets_store.ADDED_BY_BACKFILL)
     index = sheets_store.load_papers_index(papers_ws)
 
     scoped_index = _scope_to_published_range(index, args.start_date, args.end_date)

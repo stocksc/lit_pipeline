@@ -49,14 +49,20 @@ def main() -> int:
 
     index = sheets_store.load_papers_index(papers_ws)
     new_candidates = [c for c in candidates if c.arxiv_id not in index]
-    sheets_store.append_new_candidates(papers_ws, new_candidates)
+    sheets_store.append_new_candidates(papers_ws, new_candidates, added_by=sheets_store.ADDED_BY_DAILY)
     # Only once the harvest's papers are safely in the sheet -- a run that
     # dies before this leaves the checkpoint alone, so the next run re-covers
     # the same days.
     sheets_store.save_harvest_checkpoint(papers_ws, today)
 
     # Re-read so newly appended rows have row numbers and are visible to triage.
-    index = sheets_store.load_papers_index(papers_ws)
+    # Rows a backfill or deep dive added are left to that command -- otherwise
+    # a --dry-run's high scorers would get deep-read here, unasked.
+    index = {
+        arxiv_id: row
+        for arxiv_id, row in sheets_store.load_papers_index(papers_ws).items()
+        if sheets_store.daily_owns(row)
+    }
 
     run_triage_stage(anthropic_client, settings, papers_ws, index)
     run_mid_summary_stage(anthropic_client, settings, papers_ws, index)
