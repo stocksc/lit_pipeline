@@ -1,7 +1,8 @@
 """Force specific arXiv papers through triage + deep-read, whatever they score.
 
-Entry point: `uv run lit-deep-dive 2501.12345 2502.09876`
-(see pyproject.toml [project.scripts]).
+Entry point: `uv run lit-deep-dive 2501.12345 2502.09876`, or
+`uv run lit-deep-dive --ids-file picks.txt` for a list saved from a lit-pick
+page (see triage_picker.py) -- see pyproject.toml [project.scripts].
 
 The daily job and backfills both decide for themselves which papers are worth
 Opus's time: a paper is only deep-read if arXiv's keyword search surfaced it
@@ -12,9 +13,14 @@ you disagree.
 
 Given a list of ids, it ingests whatever the sheet hasn't seen yet (fetched
 straight by id, with no keyword filter -- you asked for these by name),
-triages each paper that doesn't already have a deep-read on file, then
-deep-reads it regardless of what it scored, and emails a report covering
-every requested paper -- freshly read or reused.
+triages each paper that has no triage score yet, deep-reads every paper
+without a deep-read on file regardless of what it scored, and emails a
+report covering every requested paper -- freshly read or reused.
+
+A paper that already has a triage score keeps it rather than being
+re-triaged. That's usually a paper picked off a lit-pick page: re-triaging
+would pay for it twice and swap out the score and rationale it was picked
+on, which are also what the deep-read is shown. --refresh re-triages too.
 
 Because there's no threshold in play, the report gives every paper a full
 deep-dive card rather than tiering it by score, and skips the keyword-hit
@@ -53,8 +59,10 @@ from __future__ import annotations
 
 import argparse
 import logging
+import re
 import sys
 from datetime import date, datetime, timezone
+from pathlib import Path
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -94,11 +102,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "arxiv_ids",
-        nargs="+",
+        nargs="*",
         metavar="ARXIV_ID",
         help=(
             "One or more arXiv ids to deep-dive. Accepts '2501.12345', "
             "'2501.12345v2', 'arXiv:2501.12345', or a full arxiv.org/abs/... URL"
+        ),
+    )
+    parser.add_argument(
+        "--ids-file",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Read ids from a text file (one per line, or separated by spaces/commas; "
+            "lines starting with # are ignored), e.g. one downloaded from a lit-pick page. "
+            "Combines with any ids given on the command line"
         ),
     )
     parser.add_argument(
@@ -133,7 +151,30 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if args.attach_pdfs and args.no_email:
         parser.error("--attach-pdfs has nothing to attach to with --no-email")
+    if args.ids_file is not None:
+        try:
+            args.arxiv_ids = args.arxiv_ids + _read_ids_file(args.ids_file)
+        except OSError as exc:
+            parser.error(f"can't read --ids-file {args.ids_file}: {exc.strerror or exc}")
+    if not args.arxiv_ids:
+        parser.error("give at least one arXiv id, or an --ids-file that has some in it")
     return args
+
+
+def _read_ids_file(path: Path) -> list[str]:
+    """Every id-like token in the file, in order. Lines starting with # are
+    comments (a lit-pick download opens with two). utf-8-sig, because
+    Notepad on Windows can save a byte-order mark that would otherwise stick
+    to the first id and fail its validation. `~` is expanded here because
+    Windows PowerShell passes it through to programs literally, so
+    `--ids-file ~/Downloads/picks.txt` would otherwise not be found."""
+    tokens: list[str] = []
+    for line in path.expanduser().read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        tokens.extend(token for token in re.split(r"[\s,]+", line) if token)
+    return tokens
 
 
 def _normalize_requested_ids(raw_ids: list[str]) -> list[str]:
@@ -364,7 +405,16 @@ def main(argv: list[str] | None = None) -> int:
             ", ".join(reusable),
         )
 
-    run_triage_stage(client, settings, papers_ws, to_process, force=True)
+    # Only papers with no score yet get triaged (see the module docstring);
+    # force=True still matters for those, so a row whose triage failed
+    # permanently gets another attempt. --refresh means start over, so it
+    # re-triages everything it re-reads.
+    to_triage = (
+        to_process
+        if args.refresh
+        else {arxiv_id: row for arxiv_id, row in to_process.items() if row.triage_score is None}
+    )
+    run_triage_stage(client, settings, papers_ws, to_triage, force=True)
     if to_process:
         logger.info("Triage scores (informational only -- every paper below is deep-read regardless):")
         _log_triage_scores(list(to_process.values()))

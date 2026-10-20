@@ -17,6 +17,9 @@ wheels/
 # Jupyter
 .ipynb_checkpoints/
 
+# lit-pick selection pages and the id lists saved from them
+output/
+
 
 # Model comparison inputs: full paper text, not ours to redistribute
 analysis/model_comparison/inputs/

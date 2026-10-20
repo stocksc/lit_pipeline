@@ -23,16 +23,20 @@ writes, batching, and per-paper error isolation apply either way.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from datetime import date
 
 from anthropic import Anthropic
 from gspread import Worksheet
 
-from lit_pipeline import pdf_extract, sheets_store
+from lit_pipeline import pdf_extract, reporting, sheets_store
 from lit_pipeline.arxiv_client import PaperCandidate, download_pdf_bytes
 from lit_pipeline.config import Settings
 from lit_pipeline.llm_deep_read import deep_read_paper
 from lit_pipeline.llm_mid_summary import mid_summary_paper
 from lit_pipeline.llm_triage import triage_paper
+from lit_pipeline.pricing import LLMUsage
+from lit_pipeline.schemas import TriageResult
 from lit_pipeline.sheets_store import PaperRow
 
 logger = logging.getLogger(__name__)
@@ -41,6 +45,23 @@ logger = logging.getLogger(__name__)
 # paper (slow, burns Sheets API write quota) or only at the very end
 # (loses all progress on a mid-stage crash).
 TRIAGE_BATCH_SIZE = 8
+
+
+def scope_to_published_range(index: dict[str, PaperRow], start: date, end: date) -> dict[str, PaperRow]:
+    """The rows of `index` published in [start, end] -- the working set for
+    the date-range commands (backfill.py, triage_picker.py)."""
+    scoped: dict[str, PaperRow] = {}
+    for arxiv_id, row in index.items():
+        # An off-query paper a manual deep dive added isn't something a
+        # keyword sweep would ever have found, so it stays out of the working
+        # set and therefore out of everything built from it -- matching what
+        # reporting.exclude_manual_only does for the digest.
+        if str(row.raw.get("manual_only", "")).strip():
+            continue
+        published = reporting.parse_date(str(row.raw.get("published_date", "")))
+        if published is not None and start <= published <= end:
+            scoped[arxiv_id] = row
+    return scoped
 
 
 def _candidate_from_row(row: PaperRow) -> PaperCandidate:
@@ -59,16 +80,12 @@ def _candidate_from_row(row: PaperRow) -> PaperCandidate:
     )
 
 
-def run_triage_stage(
-    client: Anthropic,
-    settings: Settings,
-    papers_ws: Worksheet,
-    index: dict[str, PaperRow],
-    force: bool = False,
-) -> None:
-    """Score every not-yet-triaged row's abstract, or -- with `force` -- every
-    row handed in, whatever state it is already in."""
-    to_triage = [
+def rows_to_triage(settings: Settings, index: dict[str, PaperRow], force: bool = False) -> list[PaperRow]:
+    """The rows `run_triage_stage` would score: every not-yet-triaged row,
+    plus errored ones with retries left -- or, with `force`, every row.
+    Exposed so a caller can size a progress display or project a cost from
+    exactly the rule the stage applies."""
+    return [
         row
         for row in index.values()
         if force
@@ -78,6 +95,23 @@ def run_triage_stage(
             and row.retry_count < settings.retries.max_retry_count
         )
     ]
+
+
+def run_triage_stage(
+    client: Anthropic,
+    settings: Settings,
+    papers_ws: Worksheet,
+    index: dict[str, PaperRow],
+    force: bool = False,
+    on_paper: Callable[[PaperRow, TriageResult | None, LLMUsage | None], None] | None = None,
+) -> None:
+    """Score every not-yet-triaged row's abstract, or -- with `force` -- every
+    row handed in, whatever state it is already in.
+
+    `on_paper`, when given, is called after each paper with its result and
+    usage (both None if it failed) -- triage_picker.py drives its progress
+    bar with it."""
+    to_triage = rows_to_triage(settings, index, force)
     logger.info("Triaging %d paper(s)", len(to_triage))
 
     batched: list[dict] = []
@@ -87,6 +121,8 @@ def run_triage_stage(
             result, usage = triage_paper(client, settings.triage, settings.interests, candidate)
         except Exception as exc:  # isolate any failure to this one paper
             logger.warning("Triage failed for %s: %s", row.arxiv_id, exc)
+            if on_paper:
+                on_paper(row, None, None)
             next_retry = row.retry_count + 1
             status = (
                 sheets_store.STATUS_TRIAGE_FAILED_PERMANENT
@@ -125,6 +161,8 @@ def run_triage_stage(
             # (every paper on a normal daily run, and every paper here) hands
             # Opus a blank or stale rationale alongside a fresh score.
             row.raw["triage_rationale"] = result.rationale
+            if on_paper:
+                on_paper(row, result, usage)
 
         if len(batched) >= TRIAGE_BATCH_SIZE:
             sheets_store.flush_cell_updates(papers_ws, batched)

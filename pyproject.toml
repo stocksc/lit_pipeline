@@ -18,6 +18,7 @@ dependencies = [
     "pymupdf>=1.24.0",
     "python-dotenv>=1.2.3",
     "pyyaml>=6.0.3",
+    "rich>=15.0.0",
 ]
 
 [project.scripts]
@@ -25,6 +26,7 @@ lit-daily = "lit_pipeline.daily_pipeline:main"
 lit-weekly = "lit_pipeline.weekly_report:main"
 lit-backfill = "lit_pipeline.backfill:main"
 lit-deep-dive = "lit_pipeline.manual_deep_dive:main"
+lit-pick = "lit_pipeline.triage_picker:main"
 
 [dependency-groups]
 dev = [

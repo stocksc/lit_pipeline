@@ -32,7 +32,12 @@ ranges are calendar dates anyway.
 
 `compute_score_histogram` is kept for backfill.py's --dry-run console
 output (a 0-10 score distribution is a fast way to eyeball a large
-historical sweep before committing to deep-read cost).
+historical sweep before committing to deep-read cost), and also drives the
+score chart on triage_picker.py's selection page.
+
+That page (`collect_picker_papers` / `PickerPaper` / `render_picker`) is
+deliberately untiered: every triaged paper gets the same card, because
+there a person picks what gets deep-read, not the threshold.
 """
 
 from __future__ import annotations
@@ -88,6 +93,28 @@ class TriagedPaperRow:
     title_short: str
     score: int
     link: str
+
+
+@dataclass
+class PickerPaper:
+    """One triaged paper on a lit-pick selection page (see triage_picker.py).
+    Unlike the email tiers, every triaged paper gets the same card here --
+    the point of the page is for a person, not the threshold, to decide."""
+
+    arxiv_id: str
+    title: str
+    authors: list[str]
+    link: str
+    published_date: str
+    triage_score: int
+    original_triage_score: int
+    triage_rationale: str
+    matched_interest: str
+    abstract: str
+    # Non-empty means a deep-read is already on file, so picking the paper
+    # again costs nothing (lit-deep-dive reuses it).
+    deep_read_summary: str
+    mid_summary: str
 
 
 @dataclass
@@ -375,6 +402,21 @@ def compute_avg_deep_read_cost(papers_records: list[dict]) -> tuple[float, int] 
     return sum(costs) / len(costs), len(costs)
 
 
+def compute_avg_triage_cost(papers_records: list[dict]) -> tuple[float, int] | None:
+    """`compute_avg_deep_read_cost`'s counterpart for triage, used by
+    triage_picker.py's --dry-run to project what triaging a window will cost
+    before any of it is spent. Same shape: sheet-wide, (avg_cost,
+    sample_size), or None with no history yet."""
+    costs = [
+        _safe_float(r.get("triage_cost_usd"))
+        for r in papers_records
+        if str(r.get("triage_cost_usd", "")).strip()
+    ]
+    if not costs:
+        return None
+    return sum(costs) / len(costs), len(costs)
+
+
 def compute_keyword_hit_counts(
     papers_records: list[dict],
     start: date,
@@ -462,6 +504,52 @@ def collect_low_tier_table(
 
     rows.sort(key=lambda r: (r.score, r.published_date), reverse=True)
     return rows, len(rows)
+
+
+def collect_picker_papers(
+    papers_records: list[dict],
+    start: date,
+    end: date,
+) -> tuple[list[PickerPaper], int]:
+    """Every triaged paper in the window, sorted by score descending (ties by
+    published_date descending), for triage_picker.py's selection page.
+
+    Returns (papers, untriaged_count), where untriaged_count is the in-window
+    rows with no score to show -- triage failed, or a --dry-run ingested them
+    and nothing has triaged them since. They're left off the page, but the
+    page says how many there are rather than letting them vanish silently.
+    """
+    papers: list[PickerPaper] = []
+    untriaged = 0
+    for record in papers_records:
+        paper_date = parse_date(str(record.get("published_date", "")))
+        if not _in_range(paper_date, start, end):
+            continue
+        score_raw = str(record.get("triage_score", "")).strip()
+        if not score_raw.isdigit():
+            untriaged += 1
+            continue
+        score = int(score_raw)
+        authors = [a.strip() for a in str(record.get("authors", "")).split(",") if a.strip()]
+        papers.append(
+            PickerPaper(
+                arxiv_id=str(record.get("arxiv_id", "")).strip(),
+                title=str(record.get("title", "")),
+                authors=authors,
+                link=str(record.get("link", "")),
+                published_date=str(record.get("published_date", "")),
+                triage_score=score,
+                original_triage_score=_original_score_or(record, score),
+                triage_rationale=str(record.get("triage_rationale", "")).strip(),
+                matched_interest=str(record.get("matched_interest", "")).strip(),
+                abstract=str(record.get("abstract", "")).strip(),
+                deep_read_summary=str(record.get("deep_read_summary", "")).strip(),
+                mid_summary=str(record.get("mid_summary", "")).strip(),
+            )
+        )
+
+    papers.sort(key=lambda p: (p.triage_score, p.published_date), reverse=True)
+    return papers, untriaged
 
 
 def jinja_env() -> Environment:
@@ -587,3 +675,43 @@ def render_report(
 
     text = "\n".join(lines)
     return html, text
+
+
+def render_picker(
+    report_title: str,
+    papers: list[PickerPaper],
+    untriaged_count: int,
+    histogram: dict[int, int],
+    triage_cost_usd: float,
+    avg_deep_read_cost: float | None,
+    window_start: date,
+    window_end: date,
+    unsearched_from: date | None = None,
+) -> str:
+    """The lit-pick selection page (see triage_picker.py): a standalone HTML
+    file opened in a browser, not an email, so it can rely on real CSS and
+    JavaScript. `avg_deep_read_cost` (None with no history yet) feeds the
+    page's running estimate of what deep-reading the current picks would
+    cost. `unsearched_from`, when arXiv stopped the search partway, puts a
+    warning on the page that [unsearched_from, window_end] may be missing
+    papers."""
+    template = jinja_env().get_template("picker.html.jinja")
+    histogram_max = max(histogram.values(), default=0)
+    return template.render(
+        report_title=report_title,
+        papers=papers,
+        untriaged_count=untriaged_count,
+        histogram=[(score, histogram.get(score, 0)) for score in range(11)],
+        histogram_max=histogram_max,
+        deep_read_on_file=sum(1 for p in papers if p.deep_read_summary),
+        triage_cost_usd=triage_cost_usd,
+        window_start=window_start,
+        window_end=window_end,
+        unsearched_from=unsearched_from,
+        page_config={
+            "storageKey": f"lit-pick:{window_start.isoformat()}:{window_end.isoformat()}",
+            "avgDeepReadCost": avg_deep_read_cost,
+            "idsFilename": f"picks_{window_start.isoformat()}_{window_end.isoformat()}.txt",
+            "windowLabel": f"{window_start.isoformat()} to {window_end.isoformat()}",
+        },
+    )

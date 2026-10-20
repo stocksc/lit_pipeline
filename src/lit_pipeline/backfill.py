@@ -37,7 +37,12 @@ from lit_pipeline import reporting, sheets_store
 from lit_pipeline.arxiv_client import fetch_candidates
 from lit_pipeline.config import load_settings
 from lit_pipeline.email_resend import send_email
-from lit_pipeline.pipeline_stages import run_deep_read_stage, run_mid_summary_stage, run_triage_stage
+from lit_pipeline.pipeline_stages import (
+    run_deep_read_stage,
+    run_mid_summary_stage,
+    run_triage_stage,
+    scope_to_published_range,
+)
 from lit_pipeline.sheets_store import PaperRow
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -71,21 +76,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     return parser.parse_args(argv)
-
-
-def _scope_to_published_range(index: dict[str, PaperRow], start: date, end: date) -> dict[str, PaperRow]:
-    scoped: dict[str, PaperRow] = {}
-    for arxiv_id, row in index.items():
-        # An off-query paper a manual deep dive added isn't something this
-        # sweep would ever have found, so it stays out of the working set and
-        # therefore out of the histogram, the costs, and the report --
-        # matching what reporting.exclude_manual_only does for the digest.
-        if str(row.raw.get("manual_only", "")).strip():
-            continue
-        published = reporting.parse_date(str(row.raw.get("published_date", "")))
-        if published is not None and start <= published <= end:
-            scoped[arxiv_id] = row
-    return scoped
 
 
 def _records_from_index(index: dict[str, PaperRow]) -> list[dict]:
@@ -126,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
     sheets_store.append_new_candidates(papers_ws, new_candidates, added_by=sheets_store.ADDED_BY_BACKFILL)
     index = sheets_store.load_papers_index(papers_ws)
 
-    scoped_index = _scope_to_published_range(index, args.start_date, args.end_date)
+    scoped_index = scope_to_published_range(index, args.start_date, args.end_date)
     logger.info("%d paper(s) in range are tracked in the sheet (new + previously seen)", len(scoped_index))
 
     run_triage_stage(client, settings, papers_ws, scoped_index)

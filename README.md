@@ -137,7 +137,7 @@ of the Opus 5 model it replaced. Triage and deep read now both run on Opus
 
 ## Beyond the daily run
 
-Two manual commands reuse the same pipeline stages.
+Three manual commands reuse the same pipeline stages.
 
 ### Backfill a past date range
 
@@ -165,23 +165,73 @@ Backfills use arXiv's search API, which won't page past 10,000 results for
 one query. With the standing keyword lists, a month at a time stays well
 under that limit, but all of 2024 at once does not.
 
+### Pick papers from a date range by hand
+
+```bash
+uv run lit-pick --start-date 2023-01-01 --end-date 2023-12-31 --dry-run
+uv run lit-pick --start-date 2023-01-01 --end-date 2023-12-31
+uv run lit-deep-dive --ids-file ~/Downloads/picks_2023-01-01_2023-12-31.txt
+```
+
+Where a backfill deep-reads whatever clears the score threshold, `lit-pick`
+leaves the choice to you. It searches and triages every paper in the window
+(a month at a time, so a full year stays under the search API's limit), then
+writes a standalone HTML page to `output/` and opens it in your browser. Each
+paper shows its score, the triage rationale, its authors, and a collapsible
+abstract and deep-read summary, with a checkbox. The page can search, filter
+by score (click a bar in the score chart), sort, and hide papers that already
+have a deep read. A tray at the bottom keeps a running count and a projected
+deep-read cost, and copies your picks as a list of IDs or as a ready-to-run
+`lit-deep-dive` command, or downloads them as a `.txt` file. Picks survive
+closing the tab.
+
+The page never spends anything; deep reads only happen when you run
+`lit-deep-dive`. Already-triaged papers aren't triaged again, so re-running a
+window only pays for papers that are new to the sheet, and the daily job
+leaves papers added this way alone. Mid summaries are skipped.
+
+A year is a long run: a few hundred arXiv requests spaced three seconds
+apart, then one triage call per paper. The terminal shows a progress bar
+for each phase, with the month and page being searched, time left, what
+triage has spent so far, and the last score, and it ends with a summary of
+how the window's papers scored against your deep-read threshold. Pressing
+Ctrl+C prints the command to resume. Each month's papers are saved to the
+sheet as soon as they're fetched. If arXiv refuses a month, the search stops
+there, what arrived is still triaged and shown, and the command prints how
+to finish. If the run is interrupted during triage, `--no-fetch` picks it
+back up without searching arXiv again.
+
+| Flag | Effect |
+|---|---|
+| `--start-date`, `--end-date` | Required, inclusive, `YYYY-MM-DD`. Matched against each paper's arXiv publish date. |
+| `--query "..."` | Search these phrases instead of `arxiv.specific_keywords` (repeatable). |
+| `--dry-run` | No triage and no page: print how many papers need triage and a projected cost. |
+| `--no-fetch` | Don't search arXiv; work from the sheet. Triages anything still waiting (resuming an interrupted run), so once everything is triaged it's a free page rebuild, e.g. to refresh the "deep read on file" badges after a deep dive. |
+| `--out PATH` | Write the page somewhere other than `output/picks_<start>_<end>.html`. |
+| `--no-open` | Don't open a browser. |
+
 ### Deep-dive specific papers
 
 ```bash
 uv run lit-deep-dive 2501.12345 arXiv:2502.09876v2 https://arxiv.org/abs/2503.01234
+uv run lit-deep-dive --ids-file picks.txt
 ```
 
-This forces named papers through triage and a deep read, whatever they score
-and whether or not the keywords would have found them. It's useful when a
-colleague sends a paper, or when the pipeline's 3/10 looks wrong. IDs are
-accepted in any common form (versioned, prefixed, pasted URLs, pre-2007
-style), and anything unrecognizable is rejected before any money is spent.
+This forces named papers through a deep read, whatever they score and
+whether or not the keywords would have found them. It's useful when a
+colleague sends a paper, when the pipeline's 3/10 looks wrong, or for a list
+picked with `lit-pick`. IDs are accepted in any common form (versioned,
+prefixed, pasted URLs, pre-2007 style), and anything unrecognizable is
+rejected before any money is spent. Papers the sheet hasn't triaged yet are
+triaged first. Papers that already have a score keep it, so a paper picked
+with `lit-pick` is deep-read on the score it was picked on.
 
 | Flag | Effect |
 |---|---|
+| `--ids-file PATH` | Read IDs from a text file: one per line, or separated by spaces or commas; `#` lines are ignored. Combines with IDs given directly. |
 | `--dry-run` | Triage only, plus a projected deep-read cost. |
 | `--no-email` | Store the results in the sheet without sending the report. |
-| `--refresh` | Re-read papers that already have a deep read. Without it they're reused for free. |
+| `--refresh` | Re-triage and re-read papers that already have a deep read. Without it they're reused for free. |
 | `--attach-pdfs` | Attach one PDF per paper: the write-up as page 1, the paper after it. |
 
 With `--attach-pdfs`, a batch that would exceed Resend's 40 MB email limit is
@@ -205,6 +255,7 @@ src/lit_pipeline/
   weekly_report.py             lit-weekly: build and send the digest
   backfill.py                  lit-backfill
   manual_deep_dive.py          lit-deep-dive
+  triage_picker.py             lit-pick: triage a date range, pick papers on an HTML page
   pipeline_stages.py           the triage, mid-summary and deep-read stages shared by all of the above
   arxiv_client.py              OAI-PMH harvest, search API, keyword filter, PDF download
   pdf_extract.py               text extraction and References trimming

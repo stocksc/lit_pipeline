@@ -93,6 +93,7 @@ MANUAL_ONLY_VALUE = "yes"
 ADDED_BY_DAILY = "daily"
 ADDED_BY_BACKFILL = "backfill"
 ADDED_BY_DEEP_DIVE = "deep_dive"
+ADDED_BY_PICKER = "picker"
 
 # --- status lifecycle -------------------------------------------------
 # A triaged row's score routes it to exactly one of two further stages:

@@ -80,6 +80,10 @@ USER_AGENT = "lit-pipeline/0.1 (personal research tracker)"
 # Be a polite client when hitting the PDF servers directly, same spirit as
 # the courtesy delay `arxiv.Client` applies to the search API.
 PDF_DOWNLOAD_DELAY_SECONDS = 2.0
+
+# Results per search-API request. triage_picker.py uses it to turn a month's
+# total result count into a page count for its progress display.
+SEARCH_PAGE_SIZE = 100
 PDF_DOWNLOAD_TIMEOUT_SECONDS = 60.0
 PDF_DOWNLOAD_MAX_RETRIES = 3
 
@@ -195,7 +199,7 @@ def fetch_candidates(
     `max_results` cap would never even surface the older papers in range
     once more than that many newer papers exist for the query.
     """
-    client = arxiv.Client(page_size=100, delay_seconds=3.0, num_retries=3)
+    client = arxiv.Client(page_size=SEARCH_PAGE_SIZE, delay_seconds=3.0, num_retries=3)
 
     date_clause = (
         f"submittedDate:[{_format_arxiv_datetime(published_after, end_of_day=False)}"
