@@ -5,10 +5,11 @@ Entry point: `uv run lit-pick --start-date 2023-01-01 --end-date 2023-12-31`
 
 backfill.py decides what's worth Opus's time by score alone. This is for when
 you'd rather decide yourself: it runs the same keyword search and the same
-triage stage over a window, then writes a standalone HTML page listing every
+triage stage over a window, then writes a standalone HTML page of every
 triaged paper -- score, rationale, authors, collapsible abstract -- with a
-checkbox on each. The page opens in your browser; tick what you want, then
-copy the ids (or a ready-made `lit-deep-dive` command, or a .txt for
+checkbox on each, browsable by research-taxonomy category as well as by
+search, score and date. The page opens in your browser; tick what you want,
+then copy the ids (or a ready-made `lit-deep-dive` command, or a .txt for
 `lit-deep-dive --ids-file`) and hand them to manual_deep_dive.py. The page
 itself never spends anything: nothing is deep-read until you run that
 command.
@@ -498,25 +499,22 @@ def main(argv: list[str] | None = None) -> int:
     # Same exclusion scope_to_published_range applies to the working set, so
     # the page shows exactly what this command searched and triaged.
     papers_records = reporting.exclude_manual_only(all_records)
+    taxonomy = load_taxonomy(settings.taxonomy.file)
     papers, untriaged_count = reporting.collect_picker_papers(
-        papers_records, args.start_date, args.end_date, taxonomy=load_taxonomy(settings.taxonomy.file)
+        papers_records, args.start_date, args.end_date, taxonomy=taxonomy
     )
-    histogram = reporting.compute_score_histogram(papers_records, args.start_date, args.end_date)
     costs = reporting.compute_cost_summary(papers_records, args.start_date, args.end_date)
-    # Sheet-wide, like every other deep-read projection -- the papers being
-    # priced are, by definition, ones without a deep-read of their own yet.
-    avg_deep_read = reporting.compute_avg_deep_read_cost(all_records)
 
     html = reporting.render_picker(
         report_title=f"{settings.weekly_report.subject_prefix}: Pick Papers",
         papers=papers,
         untriaged_count=untriaged_count,
-        histogram=histogram,
         triage_cost_usd=costs.triage_cost_usd,
-        avg_deep_read_cost=avg_deep_read[0] if avg_deep_read else None,
         window_start=args.start_date,
         window_end=args.end_date,
         unsearched_from=stopped_at,
+        taxonomy=taxonomy,
+        min_score=settings.taxonomy.min_score,
     )
     out_path = args.out or DEFAULT_OUTPUT_DIR / f"picks_{args.start_date.isoformat()}_{args.end_date.isoformat()}.html"
     out_path.parent.mkdir(parents=True, exist_ok=True)

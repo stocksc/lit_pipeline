@@ -7,473 +7,730 @@
 <script>
   // A width saved by dragging the divider is applied here, before first
   // paint, so it doesn't visibly jump into place once the page has drawn.
-  // Same key as SIDEBAR_WIDTH_KEY in the script at the bottom.
+  // Same key as WIDTH_KEY in the script at the bottom.
   try {
     const savedWidth = Number(localStorage.getItem("lit-pick:sidebar-width"));
-    if (savedWidth) document.documentElement.style.setProperty("--sidebar-width", savedWidth + "px");
+    if (savedWidth) document.documentElement.style.setProperty("--drawer-width", savedWidth + "px");
   } catch (e) {
     // Storage unavailable: the default width applies.
   }
 </script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,600&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+{% raw %}
 <style>
+  /* Layout: a library card catalog. Filters, the category tree and the picks
+     tray sit in a drawer on the left; the papers open on a card on the right. */
   :root {
-    --sidebar-width: 340px;
-    /* Papers pane */
-    --bg: #f4f4f5;
+    --drawer-width: 380px;
+    --bg: #f5f6f8;
     --surface: #ffffff;
-    --border: #e5e7eb;
-    --text: #1a1a1a;
-    --text-2: #374151;
-    --muted: #6b7280;
-    --faint: #9ca3af;
-    --link: #1d4ed8;
-    --score-high: #166534;
-    --score-mid: #1d4ed8;
-    --score-low-bg: #e5e7eb;
-    --score-low-text: #4b5563;
-    --on-file-bg: #dcfce7;
-    --on-file-text: #166534;
-    --pill-bg: #eef2ff;
-    --pill-text: #3730a3;
-    --picked-border: #1d4ed8;
-    --picked-bg: #f5f8ff;
-    /* Sidebar: dark in both themes, the same slate as the email report's header */
-    --side-bg: #1f2937;
-    --side-text: #f3f4f6;
-    --side-sub: #aab2bf;
-    --side-border: #374151;
-    --side-input-bg: #111827;
-    --side-accent: #93c5fd;
-    --side-primary: #2563eb;
-    --side-primary-text: #ffffff;
-    --bar: #4b5563;
-    --bar-active: #60a5fa;
-    --side-warn-bg: #422006;
-    --side-warn-text: #fde68a;
-    --side-warn-border: #78350f;
+    --surface-2: #eef1f5;
+    --border: #dde2e9;
+    --ink: #151a21;
+    --ink-2: #454d5a;
+    --muted: #6a7280;
+    --accent: #1f5ea8;
+    --accent-soft: #e7eef9;
+    --on-accent: #ffffff;
+    --bar: #2a78d6;
+    --bar-off: #bcd2ef;
+    --bar-track: #e3e8ef;
+    --picked-bg: #f0f5fd;
+    --score-hi-bg: #1f5ea8;
+    --score-hi-ink: #ffffff;
+    --score-mid-bg: #d3e2f6;
+    --score-mid-ink: #173a63;
+    --score-lo-bg: #e9edf2;
+    --score-lo-ink: #454d5a;
+    --ok-bg: #e2f3e7;
+    --ok-ink: #1d5e33;
+    --warn-bg: #fdf0d5;
+    --warn-ink: #5c3f00;
+    --mark-bg: #d3e2f6;
+    --mark-ink: #173a63;
+    --tip-bg: #151a21;
+    --tip-ink: #f5f6f8;
+    --tray-shadow: 0 -6px 18px rgba(21, 26, 33, 0.12);
+    --font-display: "Literata", Georgia, "Times New Roman", serif;
+    --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #111318;
-      --surface: #1a1d23;
-      --border: #2e333b;
-      --text: #e8e8ea;
-      --text-2: #c9cdd4;
-      --muted: #9aa1ac;
-      --faint: #7b828d;
-      --link: #7aa2ff;
-      --score-high: #15803d;
-      --score-mid: #2563eb;
-      --score-low-bg: #2e333b;
-      --score-low-text: #c9cdd4;
-      --on-file-bg: #133a24;
-      --on-file-text: #86efac;
-      --pill-bg: #1e2540;
-      --pill-text: #c7d2fe;
-      --picked-border: #7aa2ff;
-      --picked-bg: #1b2233;
-      --side-bg: #0b0d10;
-      --side-border: #23272e;
-      --side-input-bg: #15181d;
+      --surface: #191c22;
+      --surface-2: #21252d;
+      --border: #2d333d;
+      --ink: #eceef2;
+      --ink-2: #c3c8d0;
+      --muted: #8f97a4;
+      --accent: #82b2ee;
+      --accent-soft: #1d2a3d;
+      --on-accent: #0d1117;
+      --bar: #3987e5;
+      --bar-off: #2b4160;
+      --bar-track: #2a3039;
+      --picked-bg: #172130;
+      --score-hi-bg: #3987e5;
+      --score-hi-ink: #0d1117;
+      --score-mid-bg: #233a57;
+      --score-mid-ink: #d9e6f7;
+      --score-lo-bg: #2a3039;
+      --score-lo-ink: #c3c8d0;
+      --ok-bg: #16301f;
+      --ok-ink: #8fd6a6;
+      --warn-bg: #3a2e12;
+      --warn-ink: #f3d28b;
+      --mark-bg: #233a57;
+      --mark-ink: #d9e6f7;
+      --tip-bg: #eceef2;
+      --tip-ink: #111318;
+      --tray-shadow: 0 -6px 18px rgba(0, 0, 0, 0.45);
+      color-scheme: dark;
     }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111318;
+    --surface: #191c22;
+    --surface-2: #21252d;
+    --border: #2d333d;
+    --ink: #eceef2;
+    --ink-2: #c3c8d0;
+    --muted: #8f97a4;
+    --accent: #82b2ee;
+    --accent-soft: #1d2a3d;
+    --on-accent: #0d1117;
+    --bar: #3987e5;
+    --bar-off: #2b4160;
+    --bar-track: #2a3039;
+    --picked-bg: #172130;
+    --score-hi-bg: #3987e5;
+    --score-hi-ink: #0d1117;
+    --score-mid-bg: #233a57;
+    --score-mid-ink: #d9e6f7;
+    --score-lo-bg: #2a3039;
+    --score-lo-ink: #c3c8d0;
+    --ok-bg: #16301f;
+    --ok-ink: #8fd6a6;
+    --warn-bg: #3a2e12;
+    --warn-ink: #f3d28b;
+    --mark-bg: #233a57;
+    --mark-ink: #d9e6f7;
+    --tip-bg: #eceef2;
+    --tip-ink: #111318;
+    --tray-shadow: 0 -6px 18px rgba(0, 0, 0, 0.45);
+    color-scheme: dark;
   }
 
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  html, body { margin: 0; }
   body {
+    margin: 0;
     background: var(--bg);
-    color: var(--text);
-    font-family: Georgia, "Times New Roman", serif;
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
   }
-  .ui, button, input, select, summary, textarea {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  .wrap {
+    max-width: 1360px;
+    margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+  mark { background: var(--mark-bg); color: var(--mark-ink); border-radius: 2px; }
+
+  /* --- masthead: heads the right-hand column rather than spanning the page,
+     so the drawer starts at the top and has the whole screen height from the
+     start -- room enough for the picks tray at its foot on a laptop. */
+  .main-col { min-width: 0; display: grid; gap: 16px; align-content: start; }
+  .masthead { display: grid; gap: 6px; padding: 4px 4px 0; }
+  .eyebrow { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: clamp(26px, 3.2vw, 34px); line-height: 1.15; text-wrap: balance; }
+  .sub { margin: 0; max-width: 78ch; color: var(--ink-2); }
+  .banner { margin: 6px 0 0; max-width: 78ch; padding: 8px 12px; border-radius: 7px; font-size: 14px; }
+  .banner.warn { background: var(--warn-bg); color: var(--warn-ink); }
+  .banner.info { background: var(--surface-2); color: var(--ink-2); }
+  .banner code { overflow-wrap: anywhere; }
 
   .layout {
     display: grid;
-    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-    min-height: 100vh;
+    grid-template-columns: var(--drawer-width) 18px minmax(0, 1fr);
+    padding-block: 20px 48px;
+    align-items: start;
   }
 
-  /* The draggable divider: a wide invisible grab area over the sidebar's
-     right edge, showing a line on hover, focus, or while dragging. */
-  .resizer {
-    position: fixed;
+  /* --- the drawer: filters, the category tree, the picks tray */
+  .drawer {
+    position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + 16px);
+    max-height: calc(100vh - 32px);
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    min-width: 0;
+    /* Only on a very short screen, where even a shrunk tree leaves no room:
+       the drawer then scrolls rather than cutting the picks tray off. */
+    overflow-y: auto;
+  }
+  .tools { display: grid; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--border); }
+  .search {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-2);
+    font-size: 14px;
+  }
+  .search::placeholder { color: var(--muted); }
+  .selects { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .selects select {
+    width: 100%;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface);
+    font-size: 13.5px;
+  }
+  .toggles { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13.5px; color: var(--ink-2); }
+  .toggles label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .toggles input { margin: 0; accent-color: var(--accent); }
+  .years-filter { display: flex; flex-wrap: wrap; gap: 4px; }
+  .seg {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+  }
+  .seg:hover { border-color: var(--accent); }
+  .seg[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .tool-row { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; justify-content: space-between; font-size: 12.5px; }
+  .tool-buttons { display: flex; gap: 12px; }
+  .tool-buttons .link-btn { font-size: 12.5px; }
+  .btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--accent); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .link-btn {
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .legend { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .legend .key { width: 18px; height: 6px; border-radius: 0 3px 3px 0; background: var(--bar); }
+
+  .tree { list-style: none; margin: 0; padding: 6px 6px 10px; overflow-y: auto; flex: 1 1 auto; min-height: 96px; }
+  .tree ul { list-style: none; margin: 0; padding: 0; }
+  .row {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) 38px 56px;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px 3px calc(var(--depth, 0) * 16px + 2px);
+    border-radius: 6px;
+  }
+  .row:hover { background: var(--surface-2); }
+  .row.is-selected { background: var(--accent-soft); }
+  .row.is-reserved .label { color: var(--muted); font-style: italic; }
+  .row.is-empty .label, .row.is-empty .count { color: var(--muted); }
+  .all-row { border-bottom: 1px solid var(--border); margin-bottom: 4px; padding-bottom: 4px; }
+  .caret {
+    width: 22px;
+    height: 22px;
+    border: 0;
+    background: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--muted);
+    display: grid;
+    place-items: center;
+    padding: 0;
+  }
+  .caret svg { transition: transform 0.12s ease; }
+  .caret[aria-expanded="true"] svg { transform: rotate(90deg); }
+  .label {
+    border: 0;
+    background: none;
+    padding: 2px 0;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .depth-0 > .row .label { font-weight: 600; }
+  .row.is-reserved .label { font-weight: 500; }
+  .num { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--muted); margin-right: 6px; font-variant-numeric: tabular-nums; }
+  .picked-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 6px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    font-style: normal;
+    line-height: 1.6;
+    vertical-align: 1px;
+  }
+  .count { text-align: right; font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .bar-track { display: block; position: relative; height: 6px; background: var(--bar-track); border-radius: 0 3px 3px 0; }
+  .bar-fill { display: block; height: 100%; min-width: 2px; background: var(--bar); border-radius: 0 3px 3px 0; }
+  .bar-hit { position: absolute; top: -9px; bottom: -9px; left: 0; right: 0; cursor: default; }
+
+  /* The score chart: one bar per score, click to show that score and up.
+     Each column is plain block layout with an empty button laid over it to
+     take the click. Drawing the bar inside the button instead fails in older
+     Chrome (122, for one), which shrinks a button's contents to fit their
+     text and so squeezes a bar with no text in it to zero width. */
+  .scores { display: grid; gap: 4px; }
+  .scores-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 8px; }
+  .scores-title { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .scores-hint { font-size: 11.5px; color: var(--muted); }
+  .hist { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 2px; }
+  .hist-col { position: relative; }
+  .hist-count { display: block; height: 12px; line-height: 12px; text-align: center; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+  .hist-track { display: block; position: relative; height: 38px; margin-top: 1px; border-bottom: 1px solid var(--border); }
+  .hist-fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--bar); border-radius: 3px 3px 0 0; }
+  .hist-col.is-off .hist-fill { background: var(--bar-off); }
+  .hist-col:hover .hist-fill, .hist-col:focus-within .hist-fill { background: var(--accent); }
+  .hist-label { display: block; margin-top: 1px; text-align: center; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-2); }
+  .hist-col.is-floor .hist-label { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+  .hist-hit {
+    position: absolute;
     top: 0;
+    right: 0;
     bottom: 0;
-    left: calc(var(--sidebar-width) - 4px);
-    width: 9px;
-    z-index: 6;
+    left: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .tree-empty { padding: 18px 10px; color: var(--muted); font-size: 14px; }
+
+  /* The picks tray: pinned to the bottom of the drawer however long the tree is. */
+  .tray {
+    flex: none;
+    display: grid;
+    gap: 6px;
+    padding: 10px 14px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 0 0 10px 10px;
+  }
+  .tray-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .tray-count { font-weight: 700; font-size: 15px; }
+  .tray-note { margin: -4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.4; }
+  .tray-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tray-buttons .btn { padding: 6px 10px; }
+  .tray-buttons .btn-primary { flex: 1 0 auto; }
+  .status { font-size: 12.5px; color: var(--accent); }
+  .status:empty { display: none; }
+  .manual-copy {
+    width: 100%;
+    height: 72px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    background: var(--surface-2);
+    resize: vertical;
+  }
+
+  /* The draggable divider between the drawer and the card. */
+  .resizer {
+    position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + 16px);
+    height: calc(100vh - 32px);
     cursor: col-resize;
     touch-action: none;
   }
   .resizer::after {
     content: "";
     position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 3px;
-    width: 3px;
+    top: 10px;
+    bottom: 10px;
+    left: 7px;
+    width: 4px;
+    border-radius: 2px;
     background: transparent;
     transition: background-color 0.15s;
   }
-  .resizer:hover::after, .resizer:focus-visible::after, .is-resizing .resizer::after { background: var(--bar-active); }
+  .resizer:hover::after, .resizer:focus-visible::after, .is-resizing .resizer::after { background: var(--bar); }
   .resizer:focus-visible { outline: none; }
   .is-resizing, .is-resizing * { cursor: col-resize !important; user-select: none !important; }
 
-  /* --- left pane */
-  .sidebar {
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    background: var(--side-bg);
-    color: var(--side-text);
-    border-right: 1px solid var(--side-border);
-  }
-  .panel { padding: 18px 20px; }
-  .panel + .panel { border-top: 1px solid var(--side-border); }
-  .panel-title {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--side-sub);
-    margin: 0 0 10px;
-  }
-  .brand h1 { font-size: 19px; line-height: 1.3; margin: 0; }
-  .window { color: var(--side-sub); font-size: 13px; margin-top: 4px; }
-  .warning {
-    margin-top: 12px;
-    padding: 9px 11px;
-    border-radius: 6px;
-    background: var(--side-warn-bg);
-    color: var(--side-warn-text);
-    border: 1px solid var(--side-warn-border);
-    font-size: 12.5px;
-    line-height: 1.45;
-  }
-  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 6px; margin-top: 12px; }
-  .stat { background: var(--side-input-bg); border: 1px solid var(--side-border); border-radius: 6px; padding: 6px 8px; }
-  .stat-value { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .stat-label { font-size: 11px; color: var(--side-sub); margin-top: 1px; line-height: 1.25; }
-
-  .histogram { display: grid; grid-template-columns: repeat(11, 1fr); gap: 4px; }
-  .bar {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 3px;
-    background: none;
-    border: 0;
-    padding: 0;
-    color: var(--side-sub);
-    cursor: pointer;
-    font-size: 10.5px;
-  }
-  .bar-track { height: 40px; display: flex; align-items: flex-end; }
-  .bar-fill { width: 100%; background: var(--bar); border-radius: 3px 3px 0 0; }
-  .bar.is-active .bar-fill { background: var(--bar-active); }
-  .bar:hover .bar-fill, .bar:focus-visible .bar-fill { outline: 2px solid var(--side-text); outline-offset: 1px; }
-  .bar-label { font-weight: 700; color: var(--side-text); font-size: 11px; }
-  .hint { color: var(--side-sub); font-size: 12px; margin-top: 8px; }
-
-  .field { display: block; margin-top: 10px; }
-  .field:first-of-type { margin-top: 0; }
-  .field-label { display: block; font-size: 12px; color: var(--side-sub); margin-bottom: 4px; }
-  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-  .sidebar input[type="search"], .sidebar select {
-    width: 100%;
-    padding: 7px 9px;
-    border: 1px solid var(--side-border);
-    border-radius: 6px;
-    background: var(--side-input-bg);
-    color: var(--side-text);
-    font-size: 14px;
-  }
-  .sidebar input[type="search"]::placeholder { color: var(--side-sub); }
-  .toggles { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; font-size: 14px; }
-  .toggles label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-  .toggles input { accent-color: var(--bar-active); }
-  .list-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
-  .shown-count { font-size: 13px; color: var(--side-sub); margin-right: auto; white-space: nowrap; }
-
-  .btn {
-    border: 1px solid var(--side-border);
-    background: var(--side-input-bg);
-    color: var(--side-text);
-    border-radius: 6px;
-    padding: 7px 12px;
-    font-size: 13px;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .btn:hover:not(:disabled) { border-color: var(--side-accent); }
-  .btn-primary { background: var(--side-primary); border-color: var(--side-primary); color: var(--side-primary-text); font-weight: 600; }
-  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  /* The picks tray sits at the bottom of the sidebar, and stays pinned there
-     when a short screen makes the sections above it scroll. */
-  .picks {
-    margin-top: auto;
-    position: sticky;
-    bottom: 0;
-    background: var(--side-bg);
-    box-shadow: 0 -8px 16px rgba(0, 0, 0, 0.25);
-  }
-  .picked-count { font-size: 16px; font-weight: 700; }
-  .cost-note { font-size: 13px; color: var(--side-sub); margin-top: 3px; line-height: 1.4; }
-  .pick-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-  .pick-buttons .btn-primary { grid-column: 1 / -1; padding: 9px 12px; font-size: 14px; }
-  .status { font-size: 13px; color: var(--side-accent); min-height: 1.2em; margin-top: 8px; }
-  .manual-copy {
-    width: 100%;
-    height: 80px;
-    margin-top: 6px;
-    font-family: ui-monospace, Consolas, monospace;
-    font-size: 12px;
-    background: var(--side-input-bg);
-    color: var(--side-text);
-    border: 1px solid var(--side-border);
-    border-radius: 6px;
-    padding: 6px 8px;
-    resize: vertical;
-  }
-
-  /* --- right pane */
-  .papers-pane { padding: 24px 28px 48px; min-width: 0; }
-  .papers-inner { max-width: 820px; }
-  .empty { color: var(--muted); font-size: 15px; padding: 48px 0; text-align: center; }
-
-  .paper {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr);
+  /* --- the card */
+  .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    margin-bottom: 10px;
-    overflow: hidden;
+    border-radius: 10px;
+    padding: 22px 24px 26px;
+    min-width: 0;
+    display: grid;
+    gap: 18px;
+    align-content: start;
   }
-  .paper.is-picked { border-color: var(--picked-border); background: var(--picked-bg); box-shadow: inset 3px 0 0 var(--picked-border); }
-  .pick {
-    display: flex;
-    justify-content: center;
-    padding-top: 20px;
-    cursor: pointer;
-    border-right: 1px solid var(--border);
-  }
-  .pick input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--picked-border); }
-  .paper-body { padding: 16px 18px 14px; min-width: 0; }
-  .paper-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
-  .score { font-weight: 700; color: #ffffff; padding: 2px 8px; border-radius: 4px; }
-  .score-high { background: var(--score-high); }
-  .score-mid { background: var(--score-mid); }
-  .score-low { background: var(--score-low-bg); color: var(--score-low-text); }
-  .orig { color: var(--faint); }
-  .pill { background: var(--pill-bg); color: var(--pill-text); padding: 2px 8px; border-radius: 999px; }
-  .on-file { background: var(--on-file-bg); color: var(--on-file-text); padding: 2px 8px; border-radius: 999px; font-weight: 600; }
-  .category { font-size: 12.5px; line-height: 1.45; color: var(--muted); margin-top: 8px; overflow-wrap: anywhere; }
-  .category-name { color: var(--text-2); font-weight: 600; }
-  .paper-title { font-size: 17px; line-height: 1.35; margin: 8px 0 2px; overflow-wrap: anywhere; }
-  .category + .paper-title { margin-top: 4px; }
-  .paper-title a { color: var(--text); text-decoration: none; }
-  .paper-title a:hover { text-decoration: underline; }
-  .byline { font-size: 13px; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
-  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
-  .more-authors { background: none; border: 0; padding: 0; color: var(--link); cursor: pointer; font-size: 12px; }
-  .rationale { font-size: 14.5px; line-height: 1.5; margin: 10px 0 0; }
-  .rationale .label {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    margin-right: 6px;
-  }
-  details { margin-top: 8px; }
-  summary { cursor: pointer; font-size: 13px; color: var(--link); user-select: none; }
-  details p { font-size: 14px; line-height: 1.55; color: var(--text-2); margin: 6px 0 0; }
+  .crumbs { display: flex; flex-wrap: wrap; gap: 4px; font-size: 13px; color: var(--muted); align-items: center; }
+  .crumbs button { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 13px; }
+  .card h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 26px; line-height: 1.2; text-wrap: balance; }
+  .card h2 .num { font-size: 0.62em; margin-right: 10px; vertical-align: 0.18em; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-2); font-size: 14px; margin-top: -6px; }
+  .facts strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .definition { margin: 0; max-width: 72ch; font-size: 15.5px; line-height: 1.6; color: var(--ink-2); }
+  .section-title { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .section-title .hint { margin-left: 8px; font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 12.5px; }
+  .count-inline { margin-left: 6px; font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .note { margin: 0; color: var(--muted); font-size: 14px; max-width: 72ch; }
 
-  /* --- narrow screens: stack the panes, pin the picks tray to the bottom */
+  .children { display: grid; gap: 2px; max-width: 760px; }
+  .child {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px minmax(60px, 140px);
+    gap: 10px;
+    align-items: center;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+  }
+  .child:hover { background: var(--surface-2); }
+  .child.is-empty .name, .child.is-empty .count { color: var(--muted); }
+  .child .name { font-size: 14px; overflow-wrap: anywhere; }
+
+  .papers-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 2px; }
+  .papers-head .section-title { margin: 0; }
+  .group-title { margin: 18px 0 2px; font-size: 14px; font-weight: 600; }
+  .papers { list-style: none; margin: 0; padding: 0; }
+  .paper {
+    display: grid;
+    grid-template-columns: 30px 34px minmax(0, 1fr);
+    gap: 0 10px;
+    padding: 12px 8px 12px 2px;
+    border-bottom: 1px solid var(--border);
+  }
+  .paper:last-child { border-bottom: 0; }
+  .paper.is-picked { background: var(--picked-bg); box-shadow: inset 3px 0 0 var(--accent); }
+  .pick { display: flex; justify-content: center; padding-top: 3px; cursor: pointer; }
+  .pick input { width: 17px; height: 17px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+  .score {
+    align-self: start;
+    margin-top: 2px;
+    padding: 1px 0;
+    border-radius: 4px;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .s-hi { background: var(--score-hi-bg); color: var(--score-hi-ink); }
+  .s-mid { background: var(--score-mid-bg); color: var(--score-mid-ink); }
+  .s-lo { background: var(--score-lo-bg); color: var(--score-lo-ink); }
+  .s-min { box-shadow: inset 0 0 0 1px var(--border); color: var(--muted); }
+  .paper-body { min-width: 0; }
+  .paper-title {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--ink);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+  .paper-title:hover { color: var(--accent); text-decoration: underline; }
+  .meta { margin-top: 2px; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+  .more-authors { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px; }
+  .cat { margin-top: 3px; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+  .cat button { border: 0; background: none; padding: 0; color: inherit; cursor: pointer; font-size: inherit; text-align: left; }
+  .cat .cat-leaf { color: var(--ink-2); font-weight: 600; }
+  .cat button:hover { color: var(--accent); text-decoration: underline; }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 12px; }
+  .badge {
+    max-width: 100%;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--ink-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .badge.on-file { background: var(--ok-bg); color: var(--ok-ink); font-weight: 600; }
+  .badge.was { background: none; padding: 1px 0; color: var(--muted); }
+  .rationale { margin: 8px 0 0; max-width: 78ch; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+  .rationale .label { margin-right: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .more { display: flex; flex-wrap: wrap; gap: 2px 18px; margin-top: 6px; }
+  .more details[open] { flex-basis: 100%; }
+  .more summary { cursor: pointer; font-size: 13px; color: var(--accent); user-select: none; }
+  .more details p { margin: 6px 0 4px; max-width: 78ch; font-size: 14px; line-height: 1.55; color: var(--ink-2); }
+
+  .tip {
+    position: fixed;
+    z-index: 20;
+    pointer-events: none;
+    background: var(--tip-bg);
+    color: var(--tip-ink);
+    font-size: 12px;
+    padding: 5px 8px;
+    border-radius: 5px;
+    max-width: 280px;
+  }
+
+  /* --- narrow screens: stack the drawer over the card, pin the picks tray to the bottom */
   @media (max-width: 900px) {
-    .layout { grid-template-columns: minmax(0, 1fr); }
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 16px; padding-bottom: 220px; }
+    /* Stacked: title first, then the drawer, then the papers. */
+    .main-col { display: contents; }
+    .masthead { order: -1; }
     .resizer { display: none; }
-    .sidebar { position: static; height: auto; overflow: visible; border-right: 0; }
-    .picks {
+    .drawer { position: static; max-height: none; }
+    .tree { max-height: 50vh; }
+    .tray {
       position: fixed;
       left: 0;
       right: 0;
       bottom: 0;
-      z-index: 5;
-      padding: 12px 16px;
-      box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
+      z-index: 10;
+      border-radius: 0;
+      box-shadow: var(--tray-shadow);
+      padding: 12px max(16px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
     }
-    .pick-buttons { grid-template-columns: repeat(3, auto); justify-content: start; }
-    .pick-buttons .btn-primary { grid-column: auto; padding: 7px 12px; font-size: 13px; }
-    .panel { padding: 16px; }
-    .papers-pane { padding: 16px 16px 190px; }
-    .paper { grid-template-columns: 38px minmax(0, 1fr); }
-    .paper-body { padding: 14px 14px 12px; }
+    .tray-buttons .btn-primary { flex: none; }
+    .card { padding: 18px 16px 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .caret svg { transition: none; }
+  }
+  /* Windows contrast themes replace background colors, which is all the
+     bars are drawn with; give them system colors that survive. */
+  @media (forced-colors: active) {
+    .bar-fill, .hist-fill, .legend .key { forced-color-adjust: none; background: Highlight; }
+    .hist-col.is-off .hist-fill { background: GrayText; }
+    .bar-track { forced-color-adjust: none; background: Canvas; box-shadow: inset 0 0 0 1px GrayText; }
   }
 </style>
+{% endraw %}
 </head>
 <body>
-<div class="layout">
-  <aside class="sidebar ui">
-    <section class="panel brand">
-      <h1>{{ report_title }}</h1>
-      <div class="window">{{ window_start }} &ndash; {{ window_end }}</div>
-      {% if unsearched_from %}
-      <div class="warning" role="alert">
-        arXiv stopped responding partway, so {{ unsearched_from }} &ndash; {{ window_end }} wasn't searched and
-        papers from then may be missing. The terminal output has the command to finish it.
+<main class="wrap layout">
+  <section class="drawer" aria-label="Filters, categories and picks">
+    <div class="tools">
+      <input type="search" class="search" id="search" placeholder="Search titles, authors, abstracts" aria-label="Search titles, authors, categories, abstracts and rationales">
+      <div class="scores">
+        <div class="scores-head"><p class="scores-title">Triage scores</p><span class="scores-hint">Click a bar to filter</span></div>
+        <div class="hist" id="score-chart" role="group" aria-label="Papers by triage score"></div>
       </div>
-      {% endif %}
-      <div class="stat-grid">
-        <div class="stat"><div class="stat-value">{{ papers|length }}</div><div class="stat-label">triaged</div></div>
-        <div class="stat"><div class="stat-value">{{ deep_read_on_file }}</div><div class="stat-label">deep read on file</div></div>
-        <div class="stat" title="What triaging this window has cost so far"><div class="stat-value">${{ "%.2f"|format(triage_cost_usd) }}</div><div class="stat-label">triage cost</div></div>
-        {% if untriaged_count %}
-        <div class="stat" title="In the window but without a triage score (left by a dry run, or triage failed), so not shown on this page."><div class="stat-value">{{ untriaged_count }}</div><div class="stat-label">unscored, hidden</div></div>
-        {% endif %}
-      </div>
-    </section>
-
-    {% if papers %}
-    <section class="panel">
-      <h2 class="panel-title">Scores</h2>
-      <div class="histogram" role="group" aria-label="Papers by triage score">
-        {% for score, count in histogram %}
-        <button type="button" class="bar" data-score="{{ score }}" title="{{ count }} paper{{ '' if count == 1 else 's' }} scored {{ score }}. Click to show {{ score }} and above.">
-          <span class="bar-count">{{ count }}</span>
-          <span class="bar-track"><span class="bar-fill" style="height: {{ ((count / histogram_max * 100)|round(1)) if histogram_max else 0 }}%; min-height: {{ '2px' if count else '0' }};"></span></span>
-          <span class="bar-label">{{ score }}</span>
-        </button>
-        {% endfor %}
-      </div>
-      <div class="hint">Click a score to show that score and above.</div>
-    </section>
-    {% endif %}
-
-    <section class="panel">
-      <h2 class="panel-title">Filter</h2>
-      <label class="field">
-        <span class="field-label">Search</span>
-        <input type="search" id="search" placeholder="Titles, authors, categories, abstracts">
-      </label>
-      <div class="field-row">
-        <label>
-          <span class="field-label">Minimum score</span>
-          <select id="min-score">
-            <option value="0">Any score</option>
-            {% for score in range(1, 11) %}<option value="{{ score }}">{{ score }}+</option>{% endfor %}
-          </select>
-        </label>
-        <label>
-          <span class="field-label">Sort</span>
-          <select id="sort">
-            <option value="score">Highest score</option>
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-          </select>
-        </label>
+      <div class="selects">
+        <select id="min-score" aria-label="Minimum score">
+          <option value="0">Any score</option>
+          {% for score in range(1, 11) %}<option value="{{ score }}">Scored {{ score }}+</option>{% endfor %}
+        </select>
+        <select id="sort" aria-label="Sort">
+          <option value="score">Highest score first</option>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
       </div>
       <div class="toggles">
         <label><input type="checkbox" id="hide-deep-read"> Hide deep-read</label>
         <label><input type="checkbox" id="picked-only"> Picked only</label>
       </div>
-      <div class="list-actions">
-        <span class="shown-count" id="shown-count"></span>
-        <button type="button" class="btn" id="select-shown">Pick all shown</button>
-        <button type="button" class="btn" id="clear-picks">Clear</button>
+      <div class="years-filter" id="year-filter" role="group" aria-label="Published" hidden></div>
+      <div class="tool-row" id="tree-tools">
+        <div class="tool-buttons">
+          <button type="button" class="link-btn" id="expand-all">Expand all</button>
+          <button type="button" class="link-btn" id="collapse-all">Collapse</button>
+        </div>
+        <p class="legend"><span class="key" aria-hidden="true"></span>Bar: share of the parent</p>
       </div>
-    </section>
-
-    <section class="panel picks">
-      <div class="picked-count" id="picked-count">No papers picked</div>
-      <div class="cost-note" id="cost-note">Tick papers to queue them for a deep dive.</div>
-      <div class="pick-buttons">
+    </div>
+    <ul class="tree" id="tree" role="tree" aria-label="Papers by research category"></ul>
+    <div class="tray" id="tray">
+      <div class="tray-head">
+        <span class="tray-count" id="picked-count">No papers picked</span>
+        <button type="button" class="link-btn" id="clear-picks" hidden>Clear</button>
+      </div>
+      <p class="tray-note" id="tray-note">Tick papers to queue them for a deep dive.</p>
+      <div class="tray-buttons">
         <button type="button" class="btn btn-primary" id="copy-ids" disabled>Copy IDs</button>
         <button type="button" class="btn" id="copy-command" disabled>Copy command</button>
         <button type="button" class="btn" id="download-ids" disabled>Download .txt</button>
       </div>
       <div class="status" id="status" role="status" aria-live="polite"></div>
       <textarea class="manual-copy" id="manual-copy" readonly hidden aria-label="Text to copy"></textarea>
-    </section>
-  </aside>
-  <div class="resizer" id="resizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize the sidebar (drag, or use the arrow keys; double-click to reset)" aria-valuemin="260" aria-valuemax="640" title="Drag to resize. Double-click to reset."></div>
-
-  <main class="papers-pane">
-    <div class="papers-inner">
-      <noscript><p class="empty">Filtering, picking and copying need JavaScript turned on.</p></noscript>
-      {% if not papers %}
-      <p class="empty ui">No triaged papers in this window.</p>
-      {% endif %}
-      <p class="empty ui" id="no-matches" hidden>No papers match these filters.</p>
-      <div id="papers">
-        {% for paper in papers %}
-        <article class="paper" data-id="{{ paper.arxiv_id }}" data-score="{{ paper.triage_score }}" data-date="{{ paper.published_date }}" data-deep-read="{{ '1' if paper.deep_read_summary else '0' }}">
-          <label class="pick" title="Pick for a deep dive">
-            <input type="checkbox" aria-label="Pick for a deep dive: {{ paper.title }}">
-          </label>
-          <div class="paper-body">
-            <div class="paper-tags ui">
-              <span class="score {{ 'score-high' if paper.triage_score >= 9 else ('score-mid' if paper.triage_score >= 7 else 'score-low') }}">{{ paper.triage_score }}/10</span>
-              {% if paper.original_triage_score != paper.triage_score %}<span class="orig">originally {{ paper.original_triage_score }}/10</span>{% endif %}
-              {% if paper.matched_interest %}<span class="pill">{{ paper.matched_interest }}</span>{% endif %}
-              {% if paper.deep_read_summary %}<span class="on-file">Deep read on file</span>{% endif %}
-            </div>
-            {% if paper.category %}<div class="category ui"><span class="category-name">{{ paper.category }}</span>{% if paper.category_context %} &middot; {{ paper.category_context }}{% endif %}</div>{% endif %}
-            <h2 class="paper-title"><a href="{{ paper.link }}" target="_blank" rel="noopener">{{ paper.title }}</a></h2>
-            <div class="byline ui">
-              {{ paper.published_date }} &middot; <span class="mono">{{ paper.arxiv_id }}</span>
-              {% if paper.authors %}&middot; {{ paper.authors[:3]|join(", ") }}{% if paper.authors|length > 3 %}<span class="authors-rest" hidden>, {{ paper.authors[3:]|join(", ") }}</span> <button type="button" class="more-authors" data-more="+{{ paper.authors|length - 3 }} more">+{{ paper.authors|length - 3 }} more</button>{% endif %}{% endif %}
-            </div>
-            {% if paper.triage_rationale %}<p class="rationale"><span class="label">Triage</span>{{ paper.triage_rationale }}</p>{% endif %}
-            {% if paper.abstract %}<details><summary>Abstract</summary><p>{{ paper.abstract }}</p></details>{% endif %}
-            {% if paper.deep_read_summary %}<details><summary>Deep read summary</summary><p>{{ paper.deep_read_summary }}</p></details>
-            {% elif paper.mid_summary %}<details><summary>Short summary</summary><p>{{ paper.mid_summary }}</p></details>{% endif %}
-          </div>
-        </article>
-        {% endfor %}
-      </div>
     </div>
-  </main>
-</div>
+  </section>
+  <div class="resizer" id="resizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize the left panel (drag, or use the arrow keys; double-click to reset)" aria-valuemin="300" aria-valuemax="640" title="Drag to resize. Double-click to reset."></div>
+  <div class="main-col">
+    <header class="masthead">
+      <p class="eyebrow">{{ report_title }}</p>
+      <h1>Papers published {{ window_phrase }}</h1>
+      {% if paper_count %}
+      <p class="sub">
+        {{ "{:,}".format(paper_count) }} matched your keywords and {{ "was" if paper_count == 1 else "were" }} triaged against your
+        interests. Find the ones worth a full read by searching, filtering by score or browsing by category, and tick
+        them. Then press <em>Copy command</em> and run what it copies: nothing is spent until you do, and a paper whose
+        deep read is already on file costs nothing to pick.
+      </p>
+      {% else %}
+      <p class="sub">No papers published {{ window_phrase }} have been triaged yet.</p>
+      {% endif %}
+      {% if unsearched_from %}
+      <p class="banner warn" role="alert">
+        arXiv stopped responding partway, so {{ unsearched_from }} to {{ window_end }} wasn't searched and papers from
+        then may be missing. The terminal output has the command to finish it.
+      </p>
+      {% endif %}
+      {% if untriaged_count %}
+      <p class="banner info">
+        {{ untriaged_count }} more paper{{ "" if untriaged_count == 1 else "s" }} in the window
+        {{ "has" if untriaged_count == 1 else "have" }} no triage score yet (a dry run left
+        {{ "it" if untriaged_count == 1 else "them" }}, or triage failed), so {{ "it isn't" if untriaged_count == 1 else "they aren't" }} shown.
+      </p>
+      {% endif %}
+      {% if untagged_count %}
+      <p class="banner info">
+        {% if untagged_count == paper_count %}None of these papers has a research category yet{% else %}{{ untagged_count }} of these papers
+        {{ "has" if untagged_count == 1 else "have" }} no research category yet{% endif %}, so
+        {{ "it's" if untagged_count == 1 else "they're" }} under <em>Not tagged yet</em>. To add categories, run
+        <code>uv run lit-tag --start-date {{ window_start }} --end-date {{ window_end }}</code>, then rebuild this page with
+        <code>uv run lit-pick --start-date {{ window_start }} --end-date {{ window_end }} --no-fetch</code>.
+      </p>
+      {% endif %}
+      <noscript><p class="banner warn">Filtering, picking and copying need JavaScript turned on.</p></noscript>
+    </header>
+    <section class="card" id="card" aria-label="Papers"></section>
+  </div>
+</main>
+<div class="tip" id="tip" hidden></div>
 
-<script type="application/json" id="picker-config">{{ page_config|tojson }}</script>
+<script type="application/json" id="picker-data">{{ page_data|tojson }}</script>
+{% raw %}
 <script>
 (function () {
   "use strict";
 
-  const config = JSON.parse(document.getElementById("picker-config").textContent);
-  const list = document.getElementById("papers");
-  const cards = Array.from(list.querySelectorAll(".paper"));
-  // Server order: score descending, then newest first.
-  const serverOrder = cards.slice();
-  const byId = new Map(cards.map((card) => [card.dataset.id, card]));
-  // Cached once: textContent includes collapsed <details> text, so search
-  // covers abstracts and summaries without anyone having to expand them.
-  const haystack = new Map(cards.map((card) => [card, card.textContent.toLowerCase().replace(/\s+/g, " ")]));
-
+  const data = JSON.parse(document.getElementById("picker-data").textContent);
   const $ = (id) => document.getElementById(id);
+  const tree = $("tree");
+  const card = $("card");
   const search = $("search");
   const minScore = $("min-score");
-  const sort = $("sort");
+  const sortSelect = $("sort");
   const hideDeepRead = $("hide-deep-read");
   const pickedOnly = $("picked-only");
-  const bars = Array.from(document.querySelectorAll(".bar"));
+  const tip = $("tip");
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const plural = (n, word) => `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
+  const pct = (part, whole) => (whole ? Math.round((part / whole) * 1000) / 10 : 0);
+  const money = (value) => "$" + value.toFixed(2);
+
+  // --- the category tree, plus the buckets for papers outside it
+  const byPath = new Map();
+  const parentOf = new Map();
+  function index(nodes, parent, depth) {
+    for (const node of nodes) {
+      node.depth = depth;
+      byPath.set(node.path, node);
+      parentOf.set(node.path, parent);
+      if (node.children) index(node.children, node, depth + 1);
+      else node.papers = [];
+    }
+  }
+  index(data.nodes, null, 0);
+  const buckets = [
+    { path: "unsorted", label: "Unsorted", description: `Scored ${data.minScore} or more, but none of the research categories fits it.` },
+    { path: "other", label: "Other", description: `Scored below ${data.minScore} on triage, so it isn't placed in a research category.` },
+    { path: "untagged", label: "Not tagged yet", description: "No research category on file yet. lit-tag adds them." },
+  ];
+  for (const node of buckets) {
+    node.reserved = true;
+    node.depth = 0;
+    node.papers = [];
+    byPath.set(node.path, node);
+    parentOf.set(node.path, null);
+  }
+
+  function ancestors(node) {
+    const chain = [];
+    let parent = parentOf.get(node.path);
+    while (parent) {
+      chain.unshift(parent);
+      parent = parentOf.get(parent.path);
+    }
+    return chain;
+  }
+  const fullName = (node) => (node.num ? `${node.num} ${node.label}` : node.label);
+
+  // --- the papers, each filed under its category (a leaf) or a bucket
+  const papers = data.papers;
+  const paperById = new Map();
+  for (const paper of papers) {
+    const home = byPath.get(paper.tag);
+    paper.node = home && home.papers ? home : byPath.get("untagged");
+    paper.node.papers.push(paper);
+    paper.year = paper.published_date.slice(0, 4);
+    paper.context = paper.node.reserved ? "" : ancestors(paper.node).map((a) => a.label).join(" › ");
+    // Search covers the category too, so "BISG" finds what's filed under it.
+    paper.haystack = [
+      paper.title, paper.authors.join(" "), paper.arxiv_id, paper.triage_rationale,
+      paper.abstract, paper.deep_read_summary, paper.mid_summary, fullName(paper.node), paper.context,
+    ].join(" ").toLowerCase().replace(/\s+/g, " ");
+    paperById.set(paper.arxiv_id, paper);
+  }
+  const shownBuckets = buckets.filter((node) => node.papers.length);
+  const years = [...new Set(papers.map((p) => p.year))].sort();
+
+  // --- state
+  const expanded = new Set(data.nodes.map((n) => n.path));
+  let selected = "";
+  let terms = [];
+  let year = "all";
 
   // --- picks, persisted per window so a closed tab or a regenerated page
   // keeps them. Storage can be unavailable (private windows, blocked site
   // data), in which case picks just last as long as the tab.
   function loadPicks() {
     try {
-      const stored = JSON.parse(localStorage.getItem(config.storageKey) || "[]");
+      const stored = JSON.parse(localStorage.getItem(data.storageKey) || "[]");
       return new Set(Array.isArray(stored) ? stored : []);
     } catch (e) {
       return new Set();
@@ -481,92 +738,353 @@
   }
   function savePicks() {
     try {
-      localStorage.setItem(config.storageKey, JSON.stringify(Array.from(picks)));
+      localStorage.setItem(data.storageKey, JSON.stringify(Array.from(picks)));
     } catch (e) {
       // Nothing to do -- the page still works, picks just won't survive a reload.
     }
   }
   const picks = loadPicks();
 
-  function syncCard(card) {
-    const picked = picks.has(card.dataset.id);
-    card.querySelector('input[type="checkbox"]').checked = picked;
-    card.classList.toggle("is-picked", picked);
+  // --- filtering and counting
+  const minValue = () => Number(minScore.value) || 0;
+  function passes(paper, ignoreMin) {
+    return (
+      (ignoreMin || paper.triage_score >= minValue()) &&
+      (year === "all" || paper.year === year) &&
+      !(hideDeepRead.checked && paper.deep_read_summary) &&
+      !(pickedOnly.checked && !picks.has(paper.arxiv_id)) &&
+      terms.every((term) => paper.haystack.includes(term))
+    );
+  }
+  const filtering = () => terms.length > 0 || minValue() > 0 || year !== "all" || hideDeepRead.checked || pickedOnly.checked;
+
+  // Every count on the page comes from here: for each node, the papers under
+  // it that pass the filters, and the ones picked whatever the filters say.
+  let shownTotal = 0;
+  let pickedTotal = 0;
+  let categorizedShown = 0;
+  function recount() {
+    for (const node of byPath.values()) {
+      node.count = 0;
+      node.picked = 0;
+    }
+    shownTotal = pickedTotal = 0;
+    for (const paper of papers) {
+      const shown = passes(paper);
+      const picked = picks.has(paper.arxiv_id);
+      shownTotal += shown;
+      pickedTotal += picked;
+      if (!shown && !picked) continue;
+      for (let node = paper.node; node; node = parentOf.get(node.path)) {
+        if (shown) node.count += 1;
+        if (picked) node.picked += 1;
+      }
+    }
+    categorizedShown = data.nodes.reduce((sum, node) => sum + node.count, 0);
   }
 
-  // Picks in the order they currently appear on the page.
-  function pickedIds() {
-    return Array.from(list.children)
-      .filter((card) => picks.has(card.dataset.id))
-      .map((card) => card.dataset.id);
+  function sorted(items) {
+    const byScore = (a, b) => b.triage_score - a.triage_score || b.published_date.localeCompare(a.published_date);
+    if (sortSelect.value === "newest") {
+      return items.sort((a, b) => b.published_date.localeCompare(a.published_date) || byScore(a, b));
+    }
+    if (sortSelect.value === "oldest") {
+      return items.sort((a, b) => a.published_date.localeCompare(b.published_date) || byScore(a, b));
+    }
+    return items.sort(byScore);
+  }
+  function papersUnder(node) {
+    if (!node) return papers.filter((p) => passes(p));
+    if (node.papers) return node.papers.filter((p) => passes(p));
+    return node.children.flatMap(papersUnder);
   }
 
-  // --- filtering and sorting
-  function applyFilters() {
-    const terms = search.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    const min = Number(minScore.value) || 0;
-    let shown = 0;
-    for (const card of cards) {
-      const visible =
-        Number(card.dataset.score) >= min &&
-        !(hideDeepRead.checked && card.dataset.deepRead === "1") &&
-        !(pickedOnly.checked && !picks.has(card.dataset.id)) &&
-        terms.every((term) => haystack.get(card).includes(term));
-      card.hidden = !visible;
-      if (visible) shown += 1;
-    }
-    $("shown-count").textContent = `Showing ${shown} of ${cards.length}`;
-    $("no-matches").hidden = shown > 0 || cards.length === 0;
-    for (const bar of bars) {
-      bar.classList.toggle("is-active", Number(bar.dataset.score) >= min);
-    }
+  function highlight(text) {
+    if (!terms.length) return esc(text);
+    const pattern = new RegExp("(" + terms.map((t) => t.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&")).join("|") + ")", "gi");
+    return String(text).split(pattern).map((part, i) => (i % 2 ? `<mark>${esc(part)}</mark>` : esc(part))).join("");
   }
 
-  function applySort() {
-    const ordered = serverOrder.slice();
-    const byScore = (a, b) => Number(b.dataset.score) - Number(a.dataset.score);
-    if (sort.value === "newest") {
-      ordered.sort((a, b) => b.dataset.date.localeCompare(a.dataset.date) || byScore(a, b));
-    } else if (sort.value === "oldest") {
-      ordered.sort((a, b) => a.dataset.date.localeCompare(b.dataset.date) || byScore(a, b));
+  // --- the drawer
+  const caretSvg = '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M3 1.5 7 5 3 8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const checkSvg = '<svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 5.3 4 7.7 8.5 2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const pickedBadge = (n) => (n ? `<span class="picked-badge" title="${plural(n, "paper")} picked">${checkSvg}${n}</span>` : "");
+
+  function barHtml(node, whole, wholeLabel) {
+    const share = pct(node.count, whole);
+    const fill = node.count ? `<span class="bar-fill" style="width:${share}%"></span>` : "";
+    return `<span class="bar-track" aria-hidden="true">${fill}<span class="bar-hit" data-tip="${esc(node.label)}: ${plural(node.count, "paper")}, ${share}% of ${esc(wholeLabel)}"></span></span>`;
+  }
+
+  function rowHtml(node) {
+    // While searching, only the categories holding a match are listed.
+    if (terms.length && !node.count) return "";
+    const hasKids = !!node.children;
+    const isOpen = terms.length ? true : expanded.has(node.path);
+    const parent = parentOf.get(node.path);
+    const bar = node.reserved
+      ? '<span aria-hidden="true"></span>'
+      : barHtml(node, parent ? parent.count : categorizedShown, parent ? parent.label : "all categorized papers shown");
+    const classes = ["row", selected === node.path && "is-selected", node.reserved && "is-reserved", !node.count && "is-empty"]
+      .filter(Boolean).join(" ");
+    let html = `<li role="treeitem" class="depth-${node.depth}"${hasKids ? ` aria-expanded="${isOpen}"` : ""}>`;
+    html += `<div class="${classes}" style="--depth:${node.depth}">`;
+    html += hasKids
+      ? `<button type="button" class="caret" data-toggle="${esc(node.path)}" aria-expanded="${isOpen}" aria-label="${isOpen ? "Collapse" : "Expand"} ${esc(node.label)}">${caretSvg}</button>`
+      : '<span aria-hidden="true"></span>';
+    const num = node.num ? `<span class="num">${esc(node.num)}</span>` : "";
+    html += `<button type="button" class="label" data-select="${esc(node.path)}">${num}${highlight(node.label)}${pickedBadge(node.picked)}</button>`;
+    html += `<span class="count">${node.count.toLocaleString()}</span>${bar}</div>`;
+    if (hasKids && isOpen) html += '<ul role="group">' + node.children.map(rowHtml).join("") + "</ul>";
+    return html + "</li>";
+  }
+
+  function renderTree() {
+    const allRow =
+      `<li role="treeitem" class="depth-0 all-row"><div class="row${selected === "" ? " is-selected" : ""}" style="--depth:0">` +
+      `<span aria-hidden="true"></span><button type="button" class="label" data-select="">All papers${pickedBadge(pickedTotal)}</button>` +
+      `<span class="count">${shownTotal.toLocaleString()}</span><span aria-hidden="true"></span></div></li>`;
+    const rows = data.nodes.map(rowHtml).join("") + shownBuckets.map(rowHtml).join("");
+    tree.innerHTML = allRow + (rows || `<li class="tree-empty">${terms.length ? "No category holds a paper matching that search." : "No papers to browse."}</li>`);
+  }
+
+  function renderYearFilter() {
+    const box = $("year-filter");
+    box.hidden = years.length < 2;
+    if (box.hidden) return;
+    box.innerHTML = ["all", ...years].map((y) =>
+      `<button type="button" class="seg" data-year="${esc(y)}" aria-pressed="${y === year}">${y === "all" ? "All years" : esc(y)}</button>`
+    ).join("");
+  }
+
+  // --- the card
+  const scoreClass = (score) => (score >= 9 ? "s-hi" : score >= 7 ? "s-mid" : score >= 4 ? "s-lo" : "s-min");
+
+  function paperHtml(paper, showCategory) {
+    const picked = picks.has(paper.arxiv_id);
+    let byline = `${esc(paper.published_date)} &middot; <span class="mono">${highlight(paper.arxiv_id)}</span>`;
+    if (paper.authors.length) {
+      byline += ` &middot; ${highlight(paper.authors.slice(0, 3).join(", "))}`;
+      if (paper.authors.length > 3) {
+        const more = `+${paper.authors.length - 3} more`;
+        byline += `<span class="authors-rest" hidden>, ${highlight(paper.authors.slice(3).join(", "))}</span> <button type="button" class="more-authors" data-more="${more}">${more}</button>`;
+      }
     }
-    const fragment = document.createDocumentFragment();
-    ordered.forEach((card) => fragment.appendChild(card));
-    list.appendChild(fragment);
+    // Broadest first, down to the paper's own category in bold; each step opens that category.
+    const category = showCategory && !paper.node.reserved
+      ? '<div class="cat">' +
+        ancestors(paper.node).map((a) => `<button type="button" data-select="${esc(a.path)}">${highlight(a.label)}</button> › `).join("") +
+        `<button type="button" class="cat-leaf" data-select="${esc(paper.node.path)}">${highlight(fullName(paper.node))}</button></div>`
+      : "";
+    const badges = [
+      paper.original_triage_score !== paper.triage_score ? `<span class="badge was">originally ${paper.original_triage_score}/10</span>` : "",
+      paper.deep_read_summary ? '<span class="badge on-file">Deep read on file</span>' : "",
+    ].join("");
+    const summary = paper.deep_read_summary
+      ? `<details><summary>Deep read summary</summary><p>${highlight(paper.deep_read_summary)}</p></details>`
+      : paper.mid_summary ? `<details><summary>Short summary</summary><p>${highlight(paper.mid_summary)}</p></details>` : "";
+    const more = (paper.abstract ? `<details><summary>Abstract</summary><p>${highlight(paper.abstract)}</p></details>` : "") + summary;
+    return (
+      `<li class="paper${picked ? " is-picked" : ""}" data-id="${esc(paper.arxiv_id)}">` +
+      `<label class="pick" title="Pick for a deep dive"><input type="checkbox"${picked ? " checked" : ""} aria-label="Pick for a deep dive: ${esc(paper.title)}"></label>` +
+      `<span class="score ${scoreClass(paper.triage_score)}" title="Triage score ${paper.triage_score}/10">${paper.triage_score}</span>` +
+      `<div class="paper-body"><a class="paper-title" href="${esc(paper.link)}" target="_blank" rel="noopener">${highlight(paper.title)}</a>` +
+      `<div class="meta">${byline}</div>${category}${badges ? `<div class="badges">${badges}</div>` : ""}` +
+      (paper.triage_rationale ? `<p class="rationale"><span class="label">Triage</span>${highlight(paper.triage_rationale)}</p>` : "") +
+      (more ? `<div class="more">${more}</div>` : "") +
+      "</div></li>"
+    );
+  }
+
+  const listHtml = (items, showCategory) => `<ul class="papers">${items.map((p) => paperHtml(p, showCategory)).join("")}</ul>`;
+
+  function papersHead(count) {
+    return (
+      `<div class="papers-head"><p class="section-title">Papers<span class="count-inline">${count.toLocaleString()}</span></p>` +
+      (count ? '<button type="button" class="btn" data-action="pick-shown">Pick all shown</button>' : "") +
+      "</div>"
+    );
+  }
+
+  function emptyNote() {
+    if (!filtering()) return '<p class="note">No papers here in this window.</p>';
+    const elsewhere = selected ? shownTotal : 0;
+    return (
+      `<p class="note">No papers ${selected ? "in this category " : ""}match the filters. ` +
+      (elsewhere ? `<button type="button" class="link-btn" data-select="">See the ${plural(elsewhere, "match")} elsewhere</button>, or ` : "") +
+      `<button type="button" class="link-btn" data-action="reset-filters">${elsewhere ? "reset" : "Reset"} the filters</button>.</p>`
+    );
+  }
+
+  // The score chart sits in the drawer, so it's there whichever category is
+  // open. It counts every paper the other filters let through, in every
+  // category, the way the score filter it sets applies to all of them.
+  function renderChart() {
+    const counts = Array.from({ length: 11 }, () => 0);
+    for (const paper of papers) if (passes(paper, true)) counts[Math.min(10, Math.max(0, paper.triage_score))] += 1;
+    const max = Math.max(1, ...counts);
+    const floor = minValue();
+    $("score-chart").innerHTML = counts.map((n, score) => {
+      const label = `${plural(n, "paper")} scored ${score}. ${floor === score && score ? "Click again to show every score." : `Click to show ${score} and up.`}`;
+      const height = n ? Math.max(5, Math.round((n / max) * 100)) : 0;
+      const isFloor = floor > 0 && score === floor;
+      const classes = ["hist-col", score < floor && "is-off", isFloor && "is-floor"].filter(Boolean).join(" ");
+      return (
+        `<div class="${classes}"><span class="hist-count">${n ? n.toLocaleString() : ""}</span>` +
+        `<span class="hist-track"><span class="hist-fill" style="height:${height}%"></span></span>` +
+        `<span class="hist-label">${score}</span>` +
+        `<button type="button" class="hist-hit" data-score="${score}" data-tip="${label}" aria-label="${label}" aria-pressed="${isFloor}"></button></div>`
+      );
+    }).join("");
+  }
+
+  function renderOverview() {
+    if (!papers.length) {
+      card.innerHTML = '<h2>All papers</h2><p class="note">Nothing in this window has been triaged yet, so there is nothing to pick.</p>';
+      return;
+    }
+    const items = sorted(papersUnder(null));
+    const high = papers.filter((p) => p.triage_score >= data.minScore).length;
+    const onFile = papers.filter((p) => p.deep_read_summary).length;
+    let facts =
+      `<span><strong>${papers.length.toLocaleString()}</strong> triaged</span>` +
+      `<span><strong>${high.toLocaleString()}</strong> scored ${data.minScore}+</span>` +
+      `<span><strong>${onFile.toLocaleString()}</strong> deep read on file</span>` +
+      `<span><strong>${money(data.triageCostUsd)}</strong> triage cost</span>`;
+    if (filtering()) facts += `<span><strong>${shownTotal.toLocaleString()}</strong> match the filters</span>`;
+    card.innerHTML =
+      `<h2>All papers</h2><div class="facts">${facts}</div>` +
+      `<div>${papersHead(items.length)}${items.length ? listHtml(items, true) : emptyNote()}</div>`;
+  }
+
+  function childList(node) {
+    return '<div class="children">' + node.children.map((c) =>
+      `<button type="button" class="child${c.count ? "" : " is-empty"}" data-select="${esc(c.path)}"><span class="name"><span class="num">${esc(c.num)}</span>${esc(c.label)}</span>` +
+      `<span class="count">${c.count.toLocaleString()}</span>${barHtml(c, node.count, node.label)}</button>`
+    ).join("") + "</div>";
+  }
+
+  function renderNode(node) {
+    const crumbs =
+      '<nav class="crumbs" aria-label="Location"><button type="button" data-select="">All papers</button>' +
+      ancestors(node).map((a) => ` / <button type="button" data-select="${esc(a.path)}">${esc(fullName(a))}</button>`).join("") +
+      "</nav>";
+    const items = sorted(papersUnder(node));
+    const onFile = items.filter((p) => p.deep_read_summary).length;
+    let facts = `<span><strong>${items.length.toLocaleString()}</strong> ${items.length === 1 ? "paper" : "papers"}${filtering() ? " match the filters" : ""}</span>`;
+    facts += `<span id="node-picked"${node.picked ? "" : " hidden"}><strong>${node.picked}</strong> picked</span>`;
+    if (onFile) facts += `<span><strong>${onFile.toLocaleString()}</strong> deep read on file</span>`;
+    let html = crumbs + `<h2>${node.num ? `<span class="num">${esc(node.num)}</span>` : ""}${esc(node.label)}</h2><div class="facts">${facts}</div>`;
+    if (node.description) html += `<p class="definition">${esc(node.description)}</p>`;
+    if (node.children) {
+      html += `<div><p class="section-title">Inside this category</p>${childList(node)}</div>`;
+      const groups = node.children.map((c) => ({ c, items: sorted(papersUnder(c)) })).filter((g) => g.items.length);
+      html += `<div>${papersHead(items.length)}` + (groups.length
+        ? groups.map((g) =>
+            `<p class="group-title"><span class="num">${esc(g.c.num)}</span>${esc(g.c.label)}<span class="count-inline">${g.items.length.toLocaleString()}</span></p>` +
+            listHtml(g.items, !!g.c.children)
+          ).join("")
+        : emptyNote()) + "</div>";
+    } else {
+      html += `<div>${papersHead(items.length)}${items.length ? listHtml(items, false) : emptyNote()}</div>`;
+    }
+    card.innerHTML = html;
+  }
+
+  function render() {
+    recount();
+    renderChart();
+    renderYearFilter();
+    renderTree();
+    const node = byPath.get(selected);
+    if (node) renderNode(node);
+    else renderOverview();
+    updateTray();
+  }
+
+  function select(path, quiet) {
+    selected = byPath.has(path) ? path : "";
+    const node = byPath.get(selected);
+    if (node) for (const a of ancestors(node)) expanded.add(a.path);
+    // The hash keeps the open category across a reload.
+    try {
+      history.replaceState(null, "", selected ? "#" + selected : location.pathname + location.search);
+    } catch (e) {
+      // Some browsers refuse this on file:// pages; the page works the same.
+    }
+    render();
+    if (quiet) return;
+    if (window.matchMedia("(max-width: 900px)").matches || card.getBoundingClientRect().top < 0) {
+      card.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    }
   }
 
   // --- the picks tray
-  function money(value) {
-    return "$" + value.toFixed(2);
-  }
+  // Picks in the order the current sort puts them, whatever the filters hide.
+  const pickedIds = () => sorted(papers.filter((p) => picks.has(p.arxiv_id))).map((p) => p.arxiv_id);
 
   function updateTray() {
     const ids = pickedIds();
-    const fresh = ids.filter((id) => byId.get(id).dataset.deepRead !== "1").length;
-    const onFile = ids.length - fresh;
+    const onFile = ids.filter((id) => paperById.get(id).deep_read_summary).length;
     $("picked-count").textContent =
       ids.length === 0 ? "No papers picked" : ids.length === 1 ? "1 paper picked" : `${ids.length} papers picked`;
 
-    let note;
-    if (ids.length === 0) {
-      note = "Tick papers to queue them for a deep dive.";
-    } else {
-      const parts = [];
-      if (fresh) {
-        parts.push(
-          config.avgDeepReadCost == null
-            ? `${fresh} new deep read${fresh === 1 ? "" : "s"} (no deep-read history yet to estimate cost from)`
-            : `~${money(fresh * config.avgDeepReadCost)} for ${fresh} new deep read${fresh === 1 ? "" : "s"}`
-        );
-      }
-      if (onFile) parts.push(`${onFile} already on file (free)`);
-      note = parts.join(" · ");
-    }
-    $("cost-note").textContent = note;
+    // No cost estimate here, just whether any picks are already deep-read:
+    // lit-deep-dive reuses those rather than reading them again.
+    let note = "";
+    if (ids.length === 0) note = "Tick papers to queue them for a deep dive.";
+    else if (onFile) note = onFile === 1 ? "1 already has a deep read on file." : `${onFile} already have a deep read on file.`;
+    $("tray-note").textContent = note;
+    $("tray-note").hidden = !note;
 
     for (const id of ["copy-ids", "copy-command", "download-ids"]) {
       $(id).disabled = ids.length === 0;
     }
+    $("clear-picks").hidden = ids.length === 0;
+  }
+
+  // After a pick changes: save, and refresh what counts picks -- the tree's
+  // badges, the tray, the card's "picked" figure. The card's list itself is
+  // left alone, so an open abstract stays open.
+  function picksChanged() {
+    savePicks();
+    recount();
+    renderTree();
+    updateTray();
+    const node = byPath.get(selected);
+    const fact = $("node-picked");
+    if (node && fact) {
+      fact.hidden = !node.picked;
+      fact.querySelector("strong").textContent = node.picked;
+    }
+  }
+
+  function syncItem(item) {
+    const picked = picks.has(item.dataset.id);
+    item.classList.toggle("is-picked", picked);
+    item.querySelector(".pick input").checked = picked;
+  }
+
+  function pickShown() {
+    let added = 0;
+    for (const item of card.querySelectorAll(".paper")) {
+      if (picks.has(item.dataset.id)) continue;
+      picks.add(item.dataset.id);
+      syncItem(item);
+      added += 1;
+    }
+    picksChanged();
+    flash(added ? `Picked ${plural(added, "more paper")}.` : "Everything shown is already picked.");
+  }
+
+  function resetFilters() {
+    search.value = "";
+    terms = [];
+    minScore.value = "0";
+    year = "all";
+    hideDeepRead.checked = false;
+    pickedOnly.checked = false;
+    render();
   }
 
   let statusTimer = null;
@@ -619,63 +1137,93 @@
   }
 
   // --- events
-  list.addEventListener("change", (event) => {
-    const box = event.target;
-    if (!box.matches('input[type="checkbox"]')) return;
-    const card = box.closest(".paper");
-    if (box.checked) picks.add(card.dataset.id);
-    else picks.delete(card.dataset.id);
-    card.classList.toggle("is-picked", box.checked);
-    savePicks();
-    updateTray();
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    const yearButton = target.closest("[data-year]");
+    if (yearButton) {
+      year = yearButton.dataset.year;
+      render();
+      $("year-filter").querySelector(`[data-year="${CSS.escape(year)}"]`)?.focus();
+      return;
+    }
+    const toggle = target.closest("[data-toggle]");
+    if (toggle) {
+      const path = toggle.dataset.toggle;
+      if (expanded.has(path)) expanded.delete(path);
+      else expanded.add(path);
+      renderTree();
+      tree.querySelector(`[data-toggle="${CSS.escape(path)}"]`)?.focus();
+      return;
+    }
+    const bar = target.closest(".hist-hit");
+    if (bar) {
+      const score = Number(bar.dataset.score);
+      // Clicking the bar that's already the floor clears it.
+      minScore.value = String(score === minValue() ? 0 : score);
+      render();
+      $("score-chart").querySelector(`.hist-hit[data-score="${score}"]`)?.focus();
+      return;
+    }
+    const action = target.closest("[data-action]");
+    if (action) {
+      if (action.dataset.action === "pick-shown") pickShown();
+      else if (action.dataset.action === "reset-filters") resetFilters();
+      return;
+    }
+    const moreAuthors = target.closest(".more-authors");
+    if (moreAuthors) {
+      const rest = moreAuthors.previousElementSibling;
+      rest.hidden = !rest.hidden;
+      moreAuthors.textContent = rest.hidden ? moreAuthors.dataset.more : "fewer";
+      return;
+    }
+    const pick = target.closest("[data-select]");
+    if (pick) select(pick.dataset.select);
   });
 
-  list.addEventListener("click", (event) => {
-    const button = event.target.closest(".more-authors");
-    if (!button) return;
-    const rest = button.previousElementSibling;
-    rest.hidden = !rest.hidden;
-    button.textContent = rest.hidden ? button.dataset.more : "fewer";
+  card.addEventListener("change", (event) => {
+    const box = event.target.closest(".pick input");
+    if (!box) return;
+    const item = box.closest(".paper");
+    if (box.checked) picks.add(item.dataset.id);
+    else picks.delete(item.dataset.id);
+    item.classList.toggle("is-picked", box.checked);
+    picksChanged();
   });
 
-  search.addEventListener("input", applyFilters);
-  minScore.addEventListener("change", applyFilters);
-  hideDeepRead.addEventListener("change", applyFilters);
-  pickedOnly.addEventListener("change", applyFilters);
-  sort.addEventListener("change", () => {
-    applySort();
-    updateTray();
+  // A search looks across every category, so typing returns to all papers;
+  // the tree then shows only the categories holding a match.
+  let searchTimer = null;
+  search.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      terms = search.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+      select("", true);
+    }, 120);
   });
-
-  for (const bar of bars) {
-    bar.addEventListener("click", () => {
-      minScore.value = bar.dataset.score;
-      applyFilters();
-    });
+  for (const control of [minScore, sortSelect, hideDeepRead, pickedOnly]) {
+    control.addEventListener("change", render);
   }
 
-  $("select-shown").addEventListener("click", () => {
-    let added = 0;
-    for (const card of cards) {
-      if (card.hidden || picks.has(card.dataset.id)) continue;
-      picks.add(card.dataset.id);
-      syncCard(card);
-      added += 1;
-    }
-    savePicks();
-    updateTray();
-    flash(added ? `Picked ${added} more paper${added === 1 ? "" : "s"}.` : "Everything shown is already picked.");
+  $("expand-all").addEventListener("click", () => {
+    for (const node of byPath.values()) if (node.children) expanded.add(node.path);
+    renderTree();
   });
+  $("collapse-all").addEventListener("click", () => {
+    expanded.clear();
+    renderTree();
+  });
+  if (!data.nodes.length) $("tree-tools").hidden = true;
 
   $("clear-picks").addEventListener("click", () => {
     const count = pickedIds().length;
     if (count === 0) return;
     if (count > 3 && !window.confirm(`Clear all ${count} picks?`)) return;
     picks.clear();
-    cards.forEach(syncCard);
-    savePicks();
-    updateTray();
-    applyFilters();
+    card.querySelectorAll(".paper").forEach(syncItem);
+    picksChanged();
+    if (pickedOnly.checked) render();
+    flash("Picks cleared.");
   });
 
   // Space-separated rather than one per line: pasted after a command in a
@@ -692,54 +1240,76 @@
 
   $("download-ids").addEventListener("click", () => {
     const body =
-      `# lit-pick: ${config.windowLabel}\n` +
-      `# Run: uv run lit-deep-dive --ids-file ${config.idsFilename}\n` +
+      `# lit-pick: ${data.windowLabel}\n` +
+      `# Run: uv run lit-deep-dive --ids-file ${data.idsFilename}\n` +
       pickedIds().join("\n") +
       "\n";
     const url = URL.createObjectURL(new Blob([body], { type: "text/plain" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = config.idsFilename;
+    link.download = data.idsFilename;
     document.body.appendChild(link);
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    flash(`Downloaded ${config.idsFilename}.`);
+    flash(`Downloaded ${data.idsFilename}.`);
   });
 
-  // --- resizable sidebar. The width is a per-browser preference shared by
+  // Tooltips on the tree's bars and the score chart. Counts are always
+  // visible as text, so these only add the share or the click hint.
+  document.addEventListener("pointerover", (event) => {
+    const hit = event.target.closest("[data-tip]");
+    if (!hit) return;
+    tip.textContent = hit.dataset.tip;
+    tip.hidden = false;
+  });
+  document.addEventListener("pointermove", (event) => {
+    if (tip.hidden) return;
+    const x = Math.min(event.clientX + 12, window.innerWidth - tip.offsetWidth - 8);
+    tip.style.left = Math.max(8, x) + "px";
+    tip.style.top = event.clientY + 14 + "px";
+  });
+  document.addEventListener("pointerout", (event) => {
+    if (event.target.closest("[data-tip]")) tip.hidden = true;
+  });
+
+  // --- resizable drawer. The width is a per-browser preference shared by
   // every lit-pick page, not per window like the picks are.
-  const SIDEBAR_WIDTH_KEY = "lit-pick:sidebar-width";
-  const SIDEBAR_DEFAULT = 340;
-  const SIDEBAR_MIN = 260;
-  const SIDEBAR_MAX = 640;
+  const WIDTH_KEY = "lit-pick:sidebar-width";
+  const WIDTH_DEFAULT = 380;
+  const WIDTH_MIN = 300;
+  const WIDTH_MAX = 640;
   // Never squeeze the papers narrower than this.
-  const PAPERS_MIN = 360;
+  const CARD_MIN = 420;
+  const RESIZER_WIDTH = 18;
   const KEY_STEP = 16;
   const root = document.documentElement;
+  const layout = document.querySelector(".layout");
   const resizer = $("resizer");
 
   function clampWidth(width) {
-    const max = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, window.innerWidth - PAPERS_MIN));
-    return Math.round(Math.min(max, Math.max(SIDEBAR_MIN, width)));
+    const style = getComputedStyle(layout);
+    const room = layout.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - RESIZER_WIDTH - CARD_MIN;
+    const max = Math.max(WIDTH_MIN, Math.min(WIDTH_MAX, room));
+    return Math.round(Math.min(max, Math.max(WIDTH_MIN, width)));
   }
   function currentWidth() {
-    return parseFloat(getComputedStyle(root).getPropertyValue("--sidebar-width")) || SIDEBAR_DEFAULT;
+    return parseFloat(getComputedStyle(root).getPropertyValue("--drawer-width")) || WIDTH_DEFAULT;
   }
   function setWidth(width, persist) {
     const clamped = clampWidth(width);
-    root.style.setProperty("--sidebar-width", clamped + "px");
+    root.style.setProperty("--drawer-width", clamped + "px");
     resizer.setAttribute("aria-valuenow", String(clamped));
     if (!persist) return;
     try {
-      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped));
+      localStorage.setItem(WIDTH_KEY, String(clamped));
     } catch (e) {
       // The new width still applies; it just won't be remembered.
     }
   }
 
   // Drag tracking listens on the window rather than the divider, so a fast
-  // drag that outruns the 9px grab area keeps going.
+  // drag that outruns the grab area keeps going.
   let grabOffset = 0;
   function onDragMove(event) {
     setWidth(event.clientX - grabOffset, false);
@@ -761,7 +1331,7 @@
     window.addEventListener("pointerup", onDragEnd);
     window.addEventListener("pointercancel", onDragEnd);
   });
-  resizer.addEventListener("dblclick", () => setWidth(SIDEBAR_DEFAULT, true));
+  resizer.addEventListener("dblclick", () => setWidth(WIDTH_DEFAULT, true));
   resizer.addEventListener("keydown", (event) => {
     const step = event.shiftKey ? KEY_STEP * 4 : KEY_STEP;
     if (event.key === "ArrowLeft") setWidth(currentWidth() - step, true);
@@ -773,11 +1343,34 @@
   // clamp the shown width without overwriting the saved preference.
   window.addEventListener("resize", () => setWidth(currentWidth(), false));
 
+  // The drawer is sticky, but until the masthead scrolls away it starts
+  // further down the screen. Fitting its height to what's visible keeps the
+  // picks tray at its foot on screen either way.
+  const drawer = document.querySelector(".drawer");
+  const stacked = window.matchMedia("(max-width: 900px)");
+  let fitQueued = false;
+  function fitDrawer() {
+    fitQueued = false;
+    if (stacked.matches) {
+      drawer.style.maxHeight = resizer.style.height = "";
+      return;
+    }
+    const top = Math.max(16, drawer.getBoundingClientRect().top);
+    drawer.style.maxHeight = resizer.style.height = Math.max(240, window.innerHeight - top - 16) + "px";
+  }
+  function queueFit() {
+    if (fitQueued) return;
+    fitQueued = true;
+    requestAnimationFrame(fitDrawer);
+  }
+  window.addEventListener("scroll", queueFit, { passive: true });
+  window.addEventListener("resize", queueFit);
+
   setWidth(currentWidth(), false);
-  cards.forEach(syncCard);
-  applyFilters();
-  updateTray();
+  select(decodeURIComponent(location.hash.slice(1)), true);
+  fitDrawer();
 })();
 </script>
+{% endraw %}
 </body>
 </html>

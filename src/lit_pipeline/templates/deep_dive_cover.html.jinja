@@ -21,8 +21,7 @@
 <p class="rationale">{{ paper.score_rationale }}</p>
 {% endif %}
 {% if paper.category %}
-<p class="category">Category: <b>{{ paper.category }}</b>{% if paper.category_context %}<br/>
-  <span class="context">{{ paper.category_context }}</span>{% endif %}</p>
+<p class="category">Category: {% if paper.category_context %}<span class="context">{{ paper.category_context }} › </span>{% endif %}<b>{{ paper.category }}</b></p>
 {% endif %}
 
 <h2>Summary</h2>

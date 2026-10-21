@@ -32,12 +32,12 @@ ranges are calendar dates anyway.
 
 `compute_score_histogram` is kept for backfill.py's --dry-run console
 output (a 0-10 score distribution is a fast way to eyeball a large
-historical sweep before committing to deep-read cost), and also drives the
-score chart on triage_picker.py's selection page.
+historical sweep before committing to deep-read cost).
 
-That page (`collect_picker_papers` / `PickerPaper` / `render_picker`) is
-deliberately untiered: every triaged paper gets the same card, because
-there a person picks what gets deep-read, not the threshold.
+triage_picker.py's selection page (`collect_picker_papers` / `PickerPaper`
+/ `render_picker`) is deliberately untiered: every triaged paper gets the
+same card, because there a person picks what gets deep-read, not the
+threshold.
 
 Every card -- in the email, on the deep-dive PDF cover and on the picker page
 -- also shows the paper's research-taxonomy category when it has one (see
@@ -48,7 +48,7 @@ category never leaves a stale label behind.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from pathlib import Path
 
@@ -124,7 +124,6 @@ class PickerPaper:
     triage_score: int
     original_triage_score: int
     triage_rationale: str
-    matched_interest: str
     abstract: str
     # Non-empty means a deep-read is already on file, so picking the paper
     # again costs nothing (lit-deep-dive reuses it).
@@ -132,6 +131,10 @@ class PickerPaper:
     mid_summary: str
     category: str = ""
     category_context: str = ""
+    # The current taxonomy tag, which files the paper in the page's category
+    # tree. Blank when there's none the taxonomy knows: not tagged yet, or
+    # tagged with a category since removed.
+    tag: str = ""
 
 
 @dataclass
@@ -202,6 +205,8 @@ def _category(record: dict, taxonomy: Taxonomy | None) -> tuple[str, str]:
     """(category, context) for a paper's current taxonomy tag, e.g.
     ("1.B.i.a Dependence penalties",
      "Bias mitigation methods › In-processing › Regularization and constraints").
+    Every display shows them broadest first: the context, then the category
+    itself in bold.
 
     Both blank when there's nothing to show: no taxonomy passed, a paper
     tagged "other" (it scored below taxonomy.min_score), one not tagged yet,
@@ -211,14 +216,14 @@ def _category(record: dict, taxonomy: Taxonomy | None) -> tuple[str, str]:
     if taxonomy is None or tag == OTHER or not taxonomy.is_tag(tag):
         return "", ""
     if tag == UNSORTED:
-        return "Unsorted", "in scope, but no category fits it yet"
+        return "Unsorted (no category fits yet)", ""
     return taxonomy.display(tag), taxonomy.context(tag)
 
 
 def _category_text(category: str, context: str) -> str:
-    """The one-line form the plain-text email uses, laid out like the HTML's.
-    Not parentheses: some labels already end in a parenthetical."""
-    return f"{category} · {context}" if context else category
+    """The one-line form the plain-text email uses, in the same broadest-first
+    order as the HTML."""
+    return f"{context} › {category}" if context else category
 
 
 def _safe_float(value: object) -> float:
@@ -581,6 +586,7 @@ def collect_picker_papers(
         score = int(score_raw)
         authors = [a.strip() for a in str(record.get("authors", "")).split(",") if a.strip()]
         category, category_context = _category(record, taxonomy)
+        tag = str(record.get("taxonomy", "")).strip()
         papers.append(
             PickerPaper(
                 arxiv_id=str(record.get("arxiv_id", "")).strip(),
@@ -591,12 +597,12 @@ def collect_picker_papers(
                 triage_score=score,
                 original_triage_score=_original_score_or(record, score),
                 triage_rationale=str(record.get("triage_rationale", "")).strip(),
-                matched_interest=str(record.get("matched_interest", "")).strip(),
                 abstract=str(record.get("abstract", "")).strip(),
                 deep_read_summary=str(record.get("deep_read_summary", "")).strip(),
                 mid_summary=str(record.get("mid_summary", "")).strip(),
                 category=category,
                 category_context=category_context,
+                tag=tag if taxonomy is not None and taxonomy.is_tag(tag) else "",
             )
         )
 
@@ -733,41 +739,73 @@ def render_report(
     return html, text
 
 
+def _window_label(start: date, end: date) -> tuple[str, str]:
+    """('2023', 'in 2023') for a calendar year, ('2018–2021', 'in 2018–2021')
+    for a run of them, and the two dates otherwise."""
+    if (start.month, start.day, end.month, end.day) == (1, 1, 12, 31):
+        label = str(start.year) if start.year == end.year else f"{start.year}–{end.year}"
+        return label, f"in {label}"
+    label = f"{start.isoformat()} to {end.isoformat()}"
+    return label, f"from {label}"
+
+
+def _category_tree(taxonomy: Taxonomy) -> list[dict]:
+    """The taxonomy as nested {path, num, label, description, children} nodes,
+    for the picker page's category tree."""
+    roots: list[dict] = []
+    nodes: dict[str, dict] = {}
+    for c in taxonomy.categories:  # outline order, so a parent always comes before its children
+        node = {"path": c.id, "num": c.number, "label": c.label, "description": c.description}
+        if not c.is_leaf:
+            node["children"] = []
+        nodes[c.id] = node
+        parent = c.id.rpartition("/")[0]
+        (nodes[parent]["children"] if parent else roots).append(node)
+    return roots
+
+
 def render_picker(
     report_title: str,
     papers: list[PickerPaper],
     untriaged_count: int,
-    histogram: dict[int, int],
     triage_cost_usd: float,
-    avg_deep_read_cost: float | None,
     window_start: date,
     window_end: date,
     unsearched_from: date | None = None,
+    taxonomy: Taxonomy | None = None,
+    min_score: int = 7,
 ) -> str:
     """The lit-pick selection page (see triage_picker.py): a standalone HTML
     file opened in a browser, not an email, so it can rely on real CSS and
-    JavaScript. `avg_deep_read_cost` (None with no history yet) feeds the
-    page's running estimate of what deep-reading the current picks would
-    cost. `unsearched_from`, when arXiv stopped the search partway, puts a
-    warning on the page that [unsearched_from, window_end] may be missing
-    papers."""
+    JavaScript.
+
+    The page builds itself from the papers and the taxonomy's category tree,
+    embedded as JSON: the tree browses the papers by category, and the score
+    chart, filters and counts are all worked out in the browser. Papers
+    tagged "other" are filed under an Other bucket that `min_score`
+    (taxonomy.min_score) labels, and untagged ones under "Not tagged yet", so
+    every paper is reachable from the tree. `unsearched_from`, when arXiv
+    stopped the search partway, puts a warning on the page that
+    [unsearched_from, window_end] may be missing papers."""
     template = jinja_env().get_template("picker.html.jinja")
-    histogram_max = max(histogram.values(), default=0)
+    window_label, window_phrase = _window_label(window_start, window_end)
     return template.render(
         report_title=report_title,
-        papers=papers,
+        paper_count=len(papers),
+        untagged_count=sum(1 for p in papers if not p.tag),
         untriaged_count=untriaged_count,
-        histogram=[(score, histogram.get(score, 0)) for score in range(11)],
-        histogram_max=histogram_max,
-        deep_read_on_file=sum(1 for p in papers if p.deep_read_summary),
-        triage_cost_usd=triage_cost_usd,
         window_start=window_start,
         window_end=window_end,
+        window_label=window_label,
+        window_phrase=window_phrase,
         unsearched_from=unsearched_from,
-        page_config={
+        page_data={
             "storageKey": f"lit-pick:{window_start.isoformat()}:{window_end.isoformat()}",
-            "avgDeepReadCost": avg_deep_read_cost,
             "idsFilename": f"picks_{window_start.isoformat()}_{window_end.isoformat()}.txt",
             "windowLabel": f"{window_start.isoformat()} to {window_end.isoformat()}",
+            "triageCostUsd": triage_cost_usd,
+            "minScore": min_score,
+            "nodes": _category_tree(taxonomy) if taxonomy is not None else [],
+            "papers": [asdict(p) for p in papers],
         },
     )
