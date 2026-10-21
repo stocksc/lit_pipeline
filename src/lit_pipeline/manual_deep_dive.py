@@ -81,6 +81,7 @@ from lit_pipeline.email_resend import (
 )
 from lit_pipeline.pipeline_stages import run_deep_read_stage, run_triage_stage
 from lit_pipeline.sheets_store import PaperRow
+from lit_pipeline.taxonomy import load_taxonomy
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -438,7 +439,7 @@ def main(argv: list[str] | None = None) -> int:
     # the paper in the first place would throw away exactly what was asked
     # for. That also leaves the mid tier empty by construction.
     report_papers = reporting.collect_report_papers(
-        papers_records, window_start, window_end, score_threshold=0
+        papers_records, window_start, window_end, score_threshold=0, taxonomy=load_taxonomy(settings.taxonomy.file)
     )
     costs = reporting.compute_cost_summary(papers_records, window_start, window_end)
     # Anything requested that has no deep-read to show (its deep-read errored

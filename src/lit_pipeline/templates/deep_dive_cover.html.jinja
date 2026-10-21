@@ -20,6 +20,10 @@
 {% if paper.score_rationale and paper.original_triage_score != paper.triage_score %}
 <p class="rationale">{{ paper.score_rationale }}</p>
 {% endif %}
+{% if paper.category %}
+<p class="category">Category: <b>{{ paper.category }}</b>{% if paper.category_context %}<br/>
+  <span class="context">{{ paper.category_context }}</span>{% endif %}</p>
+{% endif %}
 
 <h2>Summary</h2>
 <p>{{ paper.summary }}</p>

@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 from lit_pipeline import reporting, sheets_store
 from lit_pipeline.config import load_settings
 from lit_pipeline.email_resend import send_email
+from lit_pipeline.taxonomy import load_taxonomy
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -39,12 +40,14 @@ def main() -> int:
 
     window_end = datetime.now(timezone.utc).date()
     window_start = window_end - timedelta(days=settings.weekly_report.lookback_days)
+    taxonomy = load_taxonomy(settings.taxonomy.file)
 
     papers = reporting.collect_report_papers(
         papers_records,
         window_start,
         window_end,
         score_threshold=settings.triage.score_threshold,
+        taxonomy=taxonomy,
     )
     mid_tier_papers = reporting.collect_mid_tier_papers(
         papers_records,
@@ -52,6 +55,7 @@ def main() -> int:
         window_end,
         mid_summary_threshold=settings.triage.mid_summary_threshold,
         score_threshold=settings.triage.score_threshold,
+        taxonomy=taxonomy,
     )
     costs = reporting.compute_cost_summary(papers_records, window_start, window_end)
     shown_ids = {p.arxiv_id for p in papers} | {p.arxiv_id for p in mid_tier_papers}

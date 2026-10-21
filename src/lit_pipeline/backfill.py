@@ -44,6 +44,7 @@ from lit_pipeline.pipeline_stages import (
     scope_to_published_range,
 )
 from lit_pipeline.sheets_store import PaperRow
+from lit_pipeline.taxonomy import load_taxonomy
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -175,11 +176,13 @@ def main(argv: list[str] | None = None) -> int:
     run_deep_read_stage(client, settings, papers_ws, scoped_index)
 
     papers_records = reporting.exclude_manual_only(sheets_store.get_all_records(papers_ws))
+    taxonomy = load_taxonomy(settings.taxonomy.file)
     report_papers = reporting.collect_report_papers(
         papers_records,
         args.start_date,
         args.end_date,
         score_threshold=settings.triage.score_threshold,
+        taxonomy=taxonomy,
     )
     mid_tier_papers = reporting.collect_mid_tier_papers(
         papers_records,
@@ -187,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
         args.end_date,
         mid_summary_threshold=settings.triage.mid_summary_threshold,
         score_threshold=settings.triage.score_threshold,
+        taxonomy=taxonomy,
     )
     costs = reporting.compute_cost_summary(papers_records, args.start_date, args.end_date)
     shown_ids = {p.arxiv_id for p in report_papers} | {p.arxiv_id for p in mid_tier_papers}

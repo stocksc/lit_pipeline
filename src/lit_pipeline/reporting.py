@@ -38,6 +38,12 @@ score chart on triage_picker.py's selection page.
 That page (`collect_picker_papers` / `PickerPaper` / `render_picker`) is
 deliberately untiered: every triaged paper gets the same card, because
 there a person picks what gets deep-read, not the threshold.
+
+Every card -- in the email, on the deep-dive PDF cover and on the picker page
+-- also shows the paper's research-taxonomy category when it has one (see
+`_category`). Labels and numbers come from the taxonomy at render time, not
+the sheet, which stores only the category's id, so renaming or reordering a
+category never leaves a stale label behind.
 """
 
 from __future__ import annotations
@@ -49,6 +55,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from lit_pipeline.arxiv_client import matches_literally
+from lit_pipeline.taxonomy import OTHER, UNSORTED, Taxonomy
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
@@ -71,6 +78,10 @@ class ReportPaper:
     # the mid tier (where a downgrade needs explaining), but the PDF cover
     # page in pdf_bundle.py shows it whenever the score moved at all.
     score_rationale: str
+    # The current taxonomy tag as a reader sees it, and the branches above
+    # it; both blank when there's no category to show (see _category).
+    category: str = ""
+    category_context: str = ""
 
 
 @dataclass
@@ -85,6 +96,10 @@ class MidTierPaper:
     # Only ever populated for the downgraded-deep-read source (Opus always
     # writes one, but a cheap-path mid_summary row never has one to read).
     score_rationale: str
+    # Usually blank: a mid-tier score is below taxonomy.min_score at its
+    # default, so the paper is tagged "other". Shown if the two are set to overlap.
+    category: str = ""
+    category_context: str = ""
 
 
 @dataclass
@@ -115,6 +130,8 @@ class PickerPaper:
     # again costs nothing (lit-deep-dive reuses it).
     deep_read_summary: str
     mid_summary: str
+    category: str = ""
+    category_context: str = ""
 
 
 @dataclass
@@ -181,6 +198,29 @@ def _original_score_or(record: dict, current_score: int) -> int:
     return int(raw) if raw.isdigit() else current_score
 
 
+def _category(record: dict, taxonomy: Taxonomy | None) -> tuple[str, str]:
+    """(category, context) for a paper's current taxonomy tag, e.g.
+    ("1.B.i.a Dependence penalties",
+     "Bias mitigation methods › In-processing › Regularization and constraints").
+
+    Both blank when there's nothing to show: no taxonomy passed, a paper
+    tagged "other" (it scored below taxonomy.min_score), one not tagged yet,
+    or one whose category has since been removed from the taxonomy.
+    """
+    tag = str(record.get("taxonomy", "")).strip()
+    if taxonomy is None or tag == OTHER or not taxonomy.is_tag(tag):
+        return "", ""
+    if tag == UNSORTED:
+        return "Unsorted", "in scope, but no category fits it yet"
+    return taxonomy.display(tag), taxonomy.context(tag)
+
+
+def _category_text(category: str, context: str) -> str:
+    """The one-line form the plain-text email uses, laid out like the HTML's.
+    Not parentheses: some labels already end in a parenthetical."""
+    return f"{category} · {context}" if context else category
+
+
 def _safe_float(value: object) -> float:
     try:
         return float(value)  # type: ignore[arg-type]
@@ -224,6 +264,7 @@ def collect_report_papers(
     start: date,
     end: date,
     score_threshold: int,
+    taxonomy: Taxonomy | None = None,
 ) -> list[ReportPaper]:
     report_papers: list[ReportPaper] = []
     for record in papers_records:
@@ -251,6 +292,7 @@ def collect_report_papers(
         ]
         authors = str(record.get("authors", ""))
         authors_display = f"{authors} ({', '.join(affiliations)})" if affiliations else authors
+        category, category_context = _category(record, taxonomy)
 
         report_papers.append(
             ReportPaper(
@@ -265,6 +307,8 @@ def collect_report_papers(
                 relevance=relevance,
                 limitations=limitations,
                 score_rationale=str(record.get("deep_read_score_rationale", "")).strip(),
+                category=category,
+                category_context=category_context,
             )
         )
 
@@ -278,6 +322,7 @@ def collect_mid_tier_papers(
     end: date,
     mid_summary_threshold: int,
     score_threshold: int,
+    taxonomy: Taxonomy | None = None,
 ) -> list[MidTierPaper]:
     """Two sources feed this tier, both just different columns on the same
     `papers` row:
@@ -312,6 +357,7 @@ def collect_mid_tier_papers(
         if not _in_range(paper_date, start, end):
             continue
 
+        category, category_context = _category(record, taxonomy)
         results.append(
             MidTierPaper(
                 arxiv_id=str(record.get("arxiv_id", "")),
@@ -322,6 +368,8 @@ def collect_mid_tier_papers(
                 original_triage_score=_original_score_or(record, score),
                 summary=summary,
                 score_rationale=str(record.get("deep_read_score_rationale", "")).strip(),
+                category=category,
+                category_context=category_context,
             )
         )
 
@@ -510,6 +558,7 @@ def collect_picker_papers(
     papers_records: list[dict],
     start: date,
     end: date,
+    taxonomy: Taxonomy | None = None,
 ) -> tuple[list[PickerPaper], int]:
     """Every triaged paper in the window, sorted by score descending (ties by
     published_date descending), for triage_picker.py's selection page.
@@ -531,6 +580,7 @@ def collect_picker_papers(
             continue
         score = int(score_raw)
         authors = [a.strip() for a in str(record.get("authors", "")).split(",") if a.strip()]
+        category, category_context = _category(record, taxonomy)
         papers.append(
             PickerPaper(
                 arxiv_id=str(record.get("arxiv_id", "")).strip(),
@@ -545,6 +595,8 @@ def collect_picker_papers(
                 abstract=str(record.get("abstract", "")).strip(),
                 deep_read_summary=str(record.get("deep_read_summary", "")).strip(),
                 mid_summary=str(record.get("mid_summary", "")).strip(),
+                category=category,
+                category_context=category_context,
             )
         )
 
@@ -606,6 +658,8 @@ def render_report(
             else f"{p.triage_score}/10"
         )
         lines.append(f"[{score_label}] {p.title}")
+        if p.category:
+            lines.append(f"  Category: {_category_text(p.category, p.category_context)}")
         lines.append(f"  {p.published_date}")
         lines.append(f"  {p.authors_display}")
         lines.append(f"  {p.link}")
@@ -625,6 +679,8 @@ def render_report(
                 else f"{p.triage_score}/10"
             )
             lines.append(f"[{score_label}] {p.title}")
+            if p.category:
+                lines.append(f"  Category: {_category_text(p.category, p.category_context)}")
             lines.append(f"  {p.published_date}")
             lines.append(f"  {p.link}")
             lines.append(f"  {p.summary}")

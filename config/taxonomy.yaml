@@ -1,0 +1,337 @@
+# Research taxonomy for the papers this pipeline tracks.
+#
+# Each paper gets exactly one leaf: the most specific node that matches its
+# MAIN contribution. A leaf's id is its path of node ids joined by "/", e.g.
+# "mitigation/pre-processing/reweighing-and-resampling", and that path is what
+# gets stored per paper (lit-tag; see src/lit_pipeline/taxonomy.py). Labels,
+# descriptions and rules can be edited freely; renaming, moving or deleting a
+# node changes leaf ids, so papers tagged with the old id need re-tagging --
+# a plain `lit-tag` run finds and re-tags them.
+#
+# The rules and every node's label and description are sent to the model that
+# tags papers, so write them as placement guidance.
+#
+# Displays number the outline from this file's order (1, A, i, a -- e.g.
+# 1.A.i is reweighing and resampling), so inserting a node renumbers its
+# later siblings. The stored tag is always the id path, which doesn't move.
+#
+# Two ids are reserved and are not nodes: "other" (scored below the tagging
+# threshold, so not categorized) and "unsorted" (in scope, but no leaf fits:
+# a sign this taxonomy needs a new leaf).
+#
+# Structure draws on:
+#   - Hort et al. 2024, "Bias Mitigation for Machine Learning Classifiers: A
+#     Comprehensive Survey" (ACM JRC) -- pre/in/post-processing and their
+#     subcategories.
+#   - Gallegos et al. 2024, "Bias and Fairness in Large Language Models: A
+#     Survey" (Computational Linguistics) -- LLM mitigation by stage, including
+#     intra-processing, and LLM bias evaluation.
+#   - Chen et al. 2024, "Fairness Testing: A Comprehensive Survey and Analysis
+#     of Trends" (ACM TOSEM) -- fairness testing.
+#   - Barocas, Hardt & Narayanan, "Fairness and Machine Learning" --
+#     independence / separation / sufficiency group criteria.
+#   - Kumar et al. 2022, "Equalizing Credit Opportunity in Algorithms"
+#     (arXiv 2210.02516) -- ECOA / Reg B framing for the lending branch.
+
+rules:
+  - Each paper gets exactly one category, the most specific one that matches its main contribution.
+  - Papers framed around lending, credit or housing go under fair-lending-and-law, even when they propose a method. A general method merely tested on a credit dataset does not.
+  - Papers framed around employment, healthcare, or criminal justice and public services go under applications, for the same reason.
+  - Methods for LLMs and other deep networks go under mitigation/llms-and-deep-networks, whatever stage they act at. Every other method goes under the mitigation family that matches how it works, even when it is built for one model type (a fair gradient-boosting method that adds a penalty is a dependence penalty).
+  - If a paper is in scope but no category fits, answer "unsorted".
+
+nodes:
+  - id: mitigation
+    label: Bias mitigation methods
+    description: The main contribution is a technique for reducing unfairness in a model or its data.
+    children:
+      - id: pre-processing
+        label: Pre-processing
+        description: Change the training data before a model is fit.
+        children:
+          - id: reweighing-and-resampling
+            label: Reweighing and resampling
+            description: Instance weights, over- or under-sampling, balanced or curated datasets, and adding or deleting data to equalize groups.
+          - id: relabeling-and-repair
+            label: Relabeling, perturbation and distribution repair
+            description: Relabel examples, model latent unbiased labels behind biased ones, or transform feature values so groups look alike, including optimal-transport and total-variation repair.
+          - id: fair-representations
+            label: Fair representations
+            description: Learn a transformed representation (latent space, projection, orthogonalization) that keeps task information but not protected-attribute information, including adversarial and information-theoretic approaches.
+          - id: synthetic-data
+            label: Synthetic data
+            description: Generate fair synthetic training data (GANs, causal generators, diffusion), or study the fairness of synthetic data generation.
+          - id: feature-selection
+            label: Fair feature selection
+            description: Choose features that are predictive but weakly dependent on protected attributes (fair lasso, causal or information-theoretic selection).
+      - id: in-processing
+        label: In-processing
+        description: Change the objective or algorithm while the model trains.
+        children:
+          - id: regularization-and-constraints
+            label: Regularization and constraints
+            description: Fairness enters the training objective directly.
+            children:
+              - id: dependence-penalties
+                label: Dependence penalties
+                description: Penalty terms measuring dependence between predictions and protected attributes (mutual information, HGR/Renyi or distance correlation, Wasserstein distance, covariance, ridge-style penalties), including fairness-penalized boosting and fair tree-splitting criteria (e.g., FairXGBoost, OT-FairBoost).
+              - id: constrained-optimization
+                label: Constrained optimization
+                description: Hard or Lagrangian fairness constraints, reductions to cost-sensitive learning, and Bayes-optimal fair classifiers derived from constrained risk minimization, including constrained boosting and optimal fair trees (e.g., FairGBM) and constrained probabilistic models.
+          - id: adversarial-training
+            label: Adversarial training
+            description: A predictor trained against an adversary that tries to recover the protected attribute from its outputs.
+          - id: robust-optimization
+            label: Robust and worst-group optimization
+            description: Distributionally robust or worst-group objectives, and training that stays fair under label noise, selection bias, poisoning or distribution shift.
+          - id: individual-fairness
+            label: Individual fairness training
+            description: Train so similar individuals are treated similarly, including invariance to sensitive perturbations and learned fair metrics.
+          - id: multi-objective-and-hyperparameter-search
+            label: Multi-objective and hyperparameter search
+            description: Treat accuracy and fairness as joint objectives through Pareto-front methods, fairness-aware hyperparameter optimization, and evolutionary or annealing search over models.
+          - id: ensembles-and-group-specific-models
+            label: Ensembles and group-specific models
+            description: Ensembles (including fairness-aware boosting such as AdaFair), multitask or decoupled group-specific models, blends of group-specific and pooled models, and mixtures of experts.
+      - id: post-processing
+        label: Post-processing
+        description: Adjust a trained model without retraining it.
+        children:
+          - id: output-adjustment
+            label: Output adjustment
+            description: Change predictions or scores through group-specific thresholds, reject-option classification, randomized or optimal-transport score transformations, and plug-in fair classifiers.
+          - id: classifier-correction
+            label: Classifier correction
+            description: Modify or wrap a trained classifier with derived predictors, multiaccuracy or multicalibration boosting, additive adjuster models, calibrators, minimal model updates, or relabeled leaves and adjusted decision paths in trained trees and forests.
+          - id: input-correction
+            label: Input correction
+            description: Transform inputs at prediction time so a fixed model behaves fairly (counterfactual distributions, rebalanced protected attributes).
+          - id: machine-unlearning
+            label: Machine unlearning
+            description: Remove the influence of training examples, features or concepts to reduce bias (influence functions, certified unlearning, LLM unlearning).
+      - id: causal-and-counterfactual
+        label: Causal and counterfactual methods
+        description: Mitigation that relies on a causal model, such as counterfactual fairness, path-specific effects, causal data adaptation and counterfactual predictors.
+      - id: intersectional-and-subgroup
+        label: Intersectional and subgroup methods
+        description: Methods for many or intersecting protected attributes and subgroup fairness, and how the choice of subgroups affects mitigation.
+      - id: multi-stage-frameworks
+        label: Multi-stage and general-purpose frameworks
+        description: Pipelines or systems that combine several stages (pre-, in- and post-processing), or that offer general, model-agnostic fairness enforcement.
+      - id: beyond-classification
+        label: Beyond standard classification
+        description: Fairness methods for problems other than standard supervised classification.
+        children:
+          - id: ranking-and-recommendation
+            label: Ranking and recommendation
+            description: Fair ranking, exposure, search and recommender systems.
+          - id: scores-regression-and-auc
+            label: Scores, regression and AUC
+            description: Fair regression, continuous risk scores, and AUC or ROC-based fairness and bipartite ranking. Relevant to credit scores.
+          - id: clustering
+            label: Clustering
+            description: Fair clustering and other unsupervised problems.
+          - id: graphs
+            label: Graphs
+            description: Graph data and graph neural networks.
+          - id: online-and-sequential
+            label: Online and sequential decisions
+            description: Streaming data, online learning, bandits, and sequential decisions with feedback (e.g., exploration to debias censored data).
+          - id: semi-supervised-active-federated
+            label: Semi-supervised, active and federated learning
+            description: Semi-supervised, active and federated learning settings.
+      - id: llms-and-deep-networks
+        label: LLMs and deep networks
+        description: Debiasing methods specific to LLMs, other generative and foundation models, and deep networks.
+        children:
+          - id: llm-data-and-prompting
+            label: LLM data and prompting
+            description: Change the data or prompts a language model sees, through counterfactual augmentation, LLM-generated training data, or debiasing prompts and instructions.
+          - id: llm-fine-tuning-and-alignment
+            label: LLM fine-tuning and alignment
+            description: Fine-tune or post-train language models for fairness (DPO or RL, contrastive or reasoning-guided fine-tuning, fairness losses).
+          - id: llm-internal-interventions
+            label: LLM internal interventions
+            description: Change model internals at inference time through activation steering, concept erasure or editing, neuron or attention-head interventions, and pruning. Includes generative image models.
+          - id: llm-decoding-and-output-correction
+            label: LLM decoding and output correction
+            description: Act on generation or outputs through constrained or reward-guided decoding, best-of-N selection, self-correction and critique, or black-box post-processing of closed models.
+          - id: deep-networks
+            label: Deep networks (non-language)
+            description: Vision, tabular and other non-language deep networks and foundation models, covering fine-tuning, intra-processing weight edits, pruning, and the effects of compression.
+
+  - id: measurement
+    label: Fairness measurement, testing and auditing
+    description: The main contribution is how unfairness is defined, estimated, tested or audited.
+    children:
+      - id: metrics
+        label: Fairness metrics
+        description: Defining fairness metrics and studying their properties.
+        children:
+          - id: group-and-subgroup
+            label: Group and subgroup metrics
+            description: Group fairness metrics (independence, separation, sufficiency), their properties and selection, and intersectional or subgroup metrics.
+          - id: individual-causal-and-distributional
+            label: Individual, causal and distributional measures
+            description: Individual-fairness, inequality-index, optimal-transport or distributional measures, and causal or counterfactual measures, with methods to estimate them.
+          - id: scores-rankings-and-regression
+            label: Metrics for scores, rankings and regression
+            description: Metrics for continuous scores, rankings and regression outputs (xAUC, ROC-based, rank-based).
+      - id: statistical-inference
+        label: Statistical inference for disparities
+        description: Confidence intervals, hypothesis and permutation tests, significance testing, and decision rules for whether a measured disparity is real.
+      - id: fairness-testing
+        label: Fairness testing of ML software
+        description: Generating discriminatory test inputs, test oracles, and testing ML pipelines and their components.
+      - id: audits-verification-and-monitoring
+        label: Audits, verification and monitoring
+        description: Audit design and its robustness to manipulation, formal verification and certification, and runtime or long-run monitoring of deployed systems.
+      - id: llm-and-generative-bias-evaluation
+        label: Bias evaluation for LLMs and generative models
+        description: Benchmarks and methods for measuring bias in language and generative models, including analyses of where bias lives in model internals.
+
+  - id: fair-lending-and-law
+    label: Fair lending, anti-discrimination law and regulation
+    description: Legal doctrine, regulation, and fairness work framed around lending, credit or housing.
+    children:
+      - id: disparate-treatment-and-proxies
+        label: Disparate treatment and proxy discrimination
+        description: Use of protected attributes, disparate treatment, and proxy discrimination, including detecting, explaining or removing proxies.
+      - id: disparate-impact-testing
+        label: Disparate impact testing and business justification
+        description: Disparate-impact analysis as practiced in law and regulation, such as regression-adjusted disparity estimates, business-necessity or exempt-feature decompositions, and audit regressions for pricing.
+      - id: less-discriminatory-alternatives
+        label: Less discriminatory alternatives (LDA search)
+        description: Searching for less discriminatory alternative models, including model multiplicity and Rashomon sets, stopping rules, and tools for meeting the burden of proof.
+      - id: regulation
+        label: Regulation and legal analysis
+        description: Laws, regulators and legal scholarship.
+        children:
+          - id: us-lending-regulation
+            label: US lending regulation and regulators
+            description: ECOA/Reg B, the Fair Housing Act, HMDA, CRA and the regulators that enforce them (CFPB, HUD, FHFA, OCC, state agencies), and what they require of credit models.
+          - id: ai-regulation
+            label: AI regulation and standards
+            description: AI-specific regulation and standards such as the EU AI Act, NYC Local Law 144, state AI laws and NIST frameworks.
+          - id: legal-analysis
+            label: Legal analysis of algorithmic fairness
+            description: Whether fairness interventions are lawful (e.g., algorithmic affirmative action), aligning technical definitions with law, and the needs of enforcement and litigation.
+      - id: lending-practice
+        label: Fair lending practice
+        description: Fairness work framed around credit and housing decisions.
+        children:
+          - id: credit-model-methods
+            label: Fairness methods for credit models
+            description: Methods developed for and evaluated on credit or mortgage models, as opposed to general methods merely tested on a credit dataset.
+          - id: compliance-and-implementation
+            label: Compliance programs and implementation
+            description: How lenders put fairness into practice, including compliance programs, profitability and business trade-offs, and industry case studies.
+          - id: evidence-of-discrimination
+            label: Evidence of lending discrimination
+            description: Empirical audits and studies of disparities in actual lending decisions or pricing.
+          - id: explainability-and-adverse-action
+            label: Explainability and adverse action
+            description: Explanations in credit decisions, such as adverse action reasons, explanation stability and explainability requirements.
+          - id: housing-and-valuation
+            label: Housing and property valuation
+            description: Housing, appraisal and property valuation.
+
+  - id: protected-attributes
+    label: Protected attributes and demographic imputation
+    description: Inferring, estimating without, learning without, or accessing protected attributes.
+    children:
+      - id: demographic-imputation
+        label: Demographic imputation (BISG and beyond)
+        description: Inferring race, ethnicity or other attributes with BISG, BIFSG, or name and geography models, and their uses.
+      - id: disparity-estimation-without-attributes
+        label: Disparity estimation with unobserved attributes
+        description: Estimating disparities when protected attributes are unobserved or imputed, including the bias of proxy-based estimators, bounds and partial identification, and consistent estimators.
+      - id: learning-without-attributes
+        label: Fair learning with missing or noisy attributes
+        description: Training fair models when protected attributes are missing, noisy, limited or inferred.
+      - id: sensitive-data-access-and-privacy
+        label: Sensitive data access and privacy
+        description: Collecting, accessing and protecting sensitive attributes for fairness work, including legal and practical constraints, encryption and privacy-preserving measurement.
+
+  - id: explainability
+    label: Explainability, interpretability and recourse
+    description: Where fairness meets explanation, interpretability and recourse.
+    children:
+      - id: explaining-unfairness
+        label: Explaining unfairness
+        description: Attributing disparities to features, causal paths or training data (Shapley-based, transport-based, data-based debugging), and evaluating XAI tools for bias detection.
+      - id: explanation-guided-mitigation
+        label: Explanation-guided mitigation
+        description: Mitigation that uses explanations (SHAP, LIME, attention attributions) to find and reduce bias, or that keeps the model explainable while debiasing.
+      - id: fairness-of-explanations
+        label: Fairness of explanations
+        description: Whether explanations or interpretability are themselves fair, and how fairness interventions change explanations.
+      - id: interpretable-fair-models
+        label: Interpretable fair models
+        description: Inherently interpretable models built under fairness constraints, such as rule sets and sparse or surrogate models.
+      - id: recourse-and-effort
+        label: Recourse and effort-based fairness
+        description: Recourse, contestability, and how hard it is for different groups to change an outcome.
+
+  - id: foundations
+    label: Foundations, trade-offs and sources of bias
+    description: Theory and conceptual work about fairness itself.
+    children:
+      - id: fairness-accuracy-tradeoffs
+        label: Fairness-accuracy trade-offs
+        description: Characterizing the cost of fairness, such as Pareto frontiers, lower bounds, and conditions under which trade-offs vanish.
+      - id: fairness-notions-and-critiques
+        label: Fairness notions and critiques
+        description: New or critiqued fairness notions, compatibility and impossibility results, and conceptual or position papers.
+      - id: welfare-and-social-choice
+        label: Welfare and social choice
+        description: Welfare-economic and social-choice formulations of fairness, and who actually benefits from fairness constraints.
+      - id: sources-of-bias
+        label: Sources of bias
+        description: Where unfairness comes from, such as label, selection and representation bias in data, and modeling choices that create disparities.
+      - id: limits-of-interventions
+        label: Limits and side effects of interventions
+        description: Unintended effects of fairness interventions, such as residual or shifted bias, leveling down, and harm to groups that weren't targeted.
+      - id: privacy-and-fairness
+        label: Privacy and fairness
+        description: Interactions between differential privacy (or other privacy techniques) and fairness.
+      - id: long-term-and-dynamic-fairness
+        label: Long-term and dynamic fairness
+        description: Fairness over time and across interacting agents, including feedback loops, simulations and multi-stage systems.
+
+  - id: applications
+    label: Applied fairness in other domains
+    description: Work framed around a specific non-lending domain.
+    children:
+      - id: employment-and-hiring
+        label: Employment and hiring
+        description: Hiring, resume screening, candidate matching and HR systems, including LLM-based screening.
+      - id: healthcare
+        label: Healthcare
+        description: Clinical and medical AI, including diagnosis, imaging and risk prediction.
+      - id: criminal-justice-and-public-sector
+        label: Criminal justice and public sector
+        description: Criminal justice risk assessment, child welfare, public benefits and humanitarian allocation.
+      - id: other-domains
+        label: Other domains
+        description: Other application domains, such as education, insurance and advertising.
+
+  - id: practice
+    label: Tools, benchmarks and research practice
+    description: Infrastructure and synthesis for fairness work.
+    children:
+      - id: toolkits-and-libraries
+        label: Toolkits and libraries
+        description: Open-source toolkits, libraries and automated systems for measuring and mitigating bias.
+      - id: benchmarks-datasets-and-documentation
+        label: Benchmarks, datasets and documentation
+        description: Datasets, benchmarks and documentation standards for fairness research.
+      - id: empirical-comparisons
+        label: Empirical comparisons of methods
+        description: Systematic empirical comparisons and evaluations of existing fairness methods.
+      - id: surveys-and-overviews
+        label: Surveys and overviews
+        description: Surveys, reviews and overviews of the field or a part of it.
+      - id: governance-and-deployment
+        label: Governance and deployment
+        description: Responsible-AI frameworks, governance processes, stakeholder tools, and lessons from deploying fairness in production.

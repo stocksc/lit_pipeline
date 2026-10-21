@@ -275,7 +275,10 @@
   .orig { color: var(--faint); }
   .pill { background: var(--pill-bg); color: var(--pill-text); padding: 2px 8px; border-radius: 999px; }
   .on-file { background: var(--on-file-bg); color: var(--on-file-text); padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .category { font-size: 12.5px; line-height: 1.45; color: var(--muted); margin-top: 8px; overflow-wrap: anywhere; }
+  .category-name { color: var(--text-2); font-weight: 600; }
   .paper-title { font-size: 17px; line-height: 1.35; margin: 8px 0 2px; overflow-wrap: anywhere; }
+  .category + .paper-title { margin-top: 4px; }
   .paper-title a { color: var(--text); text-decoration: none; }
   .paper-title a:hover { text-decoration: underline; }
   .byline { font-size: 13px; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
@@ -360,7 +363,7 @@
       <h2 class="panel-title">Filter</h2>
       <label class="field">
         <span class="field-label">Search</span>
-        <input type="search" id="search" placeholder="Titles, authors, abstracts, rationales">
+        <input type="search" id="search" placeholder="Titles, authors, categories, abstracts">
       </label>
       <div class="field-row">
         <label>
@@ -424,6 +427,7 @@
               {% if paper.matched_interest %}<span class="pill">{{ paper.matched_interest }}</span>{% endif %}
               {% if paper.deep_read_summary %}<span class="on-file">Deep read on file</span>{% endif %}
             </div>
+            {% if paper.category %}<div class="category ui"><span class="category-name">{{ paper.category }}</span>{% if paper.category_context %} &middot; {{ paper.category_context }}{% endif %}</div>{% endif %}
             <h2 class="paper-title"><a href="{{ paper.link }}" target="_blank" rel="noopener">{{ paper.title }}</a></h2>
             <div class="byline ui">
               {{ paper.published_date }} &middot; <span class="mono">{{ paper.arxiv_id }}</span>

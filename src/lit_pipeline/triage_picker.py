@@ -78,6 +78,7 @@ from lit_pipeline.pipeline_stages import TRIAGE_BATCH_SIZE, rows_to_triage, run_
 from lit_pipeline.pricing import LLMUsage
 from lit_pipeline.schemas import TriageResult
 from lit_pipeline.sheets_store import PaperRow
+from lit_pipeline.taxonomy import load_taxonomy
 
 # Everything user-facing goes through one rich Console, so log warnings print
 # cleanly above the live progress bars instead of tearing through them.
@@ -497,7 +498,9 @@ def main(argv: list[str] | None = None) -> int:
     # Same exclusion scope_to_published_range applies to the working set, so
     # the page shows exactly what this command searched and triaged.
     papers_records = reporting.exclude_manual_only(all_records)
-    papers, untriaged_count = reporting.collect_picker_papers(papers_records, args.start_date, args.end_date)
+    papers, untriaged_count = reporting.collect_picker_papers(
+        papers_records, args.start_date, args.end_date, taxonomy=load_taxonomy(settings.taxonomy.file)
+    )
     histogram = reporting.compute_score_histogram(papers_records, args.start_date, args.end_date)
     costs = reporting.compute_cost_summary(papers_records, args.start_date, args.end_date)
     # Sheet-wide, like every other deep-read projection -- the papers being

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Union
+from typing import Literal, Union
 
 import yaml
 from pydantic import BaseModel
@@ -46,6 +46,14 @@ class DeepReadSettings(BaseModel):
     max_pdf_pages: int = 50
 
 
+class TaxonomySettings(BaseModel):
+    # Path to the category tree, relative to the project root (see taxonomy.py).
+    file: str = "config/taxonomy.yaml"
+    # Papers scoring below this are tagged "other" rather than categorized.
+    min_score: int = 7
+    effort: Literal["low", "medium", "high"] = "medium"
+
+
 class GoogleSheetsSettings(BaseModel):
     sheet_id: str
     papers_tab: str = "papers"
@@ -73,6 +81,7 @@ class Settings(BaseModel):
     google_sheets: GoogleSheetsSettings
     weekly_report: WeeklyReportSettings
     retries: RetrySettings = RetrySettings()
+    taxonomy: TaxonomySettings = TaxonomySettings()
 
 
 def load_settings(path: Union[Path, str, None] = None) -> Settings:

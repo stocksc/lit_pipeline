@@ -18,6 +18,15 @@ Deciding *which* rows deserve that is entirely the caller's business --
 manual_deep_dive, for one, hands over only the papers with no existing
 deep-read to reuse. Nothing else about the stages changes -- the same
 writes, batching, and per-paper error isolation apply either way.
+
+Both stages also tag each paper with its research-taxonomy category (see
+taxonomy.py), mirroring the two scores: triage writes original_taxonomy and
+taxonomy from the abstract, and a deep read rewrites taxonomy with its own
+summary in view. A paper scoring below taxonomy.min_score is tagged "other"
+with no call. Tagging is a separate call (llm_tag.py, the one lit-tag uses),
+so the triage and deep-read prompts are untouched, and its cost is added to
+the stage's own cost columns. A failed tagging call never fails the paper:
+the triage or deep read is written as usual and the tag is left as it was.
 """
 
 from __future__ import annotations
@@ -34,10 +43,12 @@ from lit_pipeline.arxiv_client import PaperCandidate, download_pdf_bytes
 from lit_pipeline.config import Settings
 from lit_pipeline.llm_deep_read import deep_read_paper
 from lit_pipeline.llm_mid_summary import mid_summary_paper
+from lit_pipeline.llm_tag import tag_paper
 from lit_pipeline.llm_triage import triage_paper
 from lit_pipeline.pricing import LLMUsage
-from lit_pipeline.schemas import TriageResult
+from lit_pipeline.schemas import DeepReadResult, TriageResult
 from lit_pipeline.sheets_store import PaperRow
+from lit_pipeline.taxonomy import OTHER, Taxonomy, load_taxonomy
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +91,42 @@ def _candidate_from_row(row: PaperRow) -> PaperCandidate:
     )
 
 
+def _place(
+    client: Anthropic,
+    settings: Settings,
+    taxonomy: Taxonomy,
+    row: PaperRow,
+    score: int,
+    deep_read: DeepReadResult | None = None,
+) -> tuple[str | None, LLMUsage | None]:
+    """(tag, usage) for a paper that just scored `score`.
+
+    Below taxonomy.min_score that's "other", with no call. Otherwise Claude
+    places the paper from its title and abstract, plus the deep read's summary
+    and relevance when given one. A failed call returns (None, None), and the
+    caller leaves the paper's tag as it was: blank after a triage, for lit-tag
+    to fill in, or the triage's tag after a deep read.
+    """
+    if score < settings.taxonomy.min_score:
+        return OTHER, None
+    title, abstract = str(row.raw.get("title", "")), str(row.raw.get("abstract", ""))
+    try:
+        if deep_read is None:
+            return tag_paper(client, settings, taxonomy, title, abstract)
+        return tag_paper(
+            client,
+            settings,
+            taxonomy,
+            title,
+            abstract,
+            deep_read_summary=deep_read.summary,
+            deep_read_relevance="; ".join(deep_read.relevance),
+        )
+    except Exception as exc:  # a missing tag shouldn't cost the paper its triage or deep read
+        logger.warning("Tagging failed for %s: %s", row.arxiv_id, exc)
+        return None, None
+
+
 def rows_to_triage(settings: Settings, index: dict[str, PaperRow], force: bool = False) -> list[PaperRow]:
     """The rows `run_triage_stage` would score: every not-yet-triaged row,
     plus errored ones with retries left -- or, with `force`, every row.
@@ -109,10 +156,11 @@ def run_triage_stage(
     row handed in, whatever state it is already in.
 
     `on_paper`, when given, is called after each paper with its result and
-    usage (both None if it failed) -- triage_picker.py drives its progress
-    bar with it."""
+    usage (both None if it failed), the usage including the tagging call --
+    triage_picker.py drives its progress bar with it."""
     to_triage = rows_to_triage(settings, index, force)
     logger.info("Triaging %d paper(s)", len(to_triage))
+    taxonomy = load_taxonomy(settings.taxonomy.file)
 
     batched: list[dict] = []
     for row in to_triage:
@@ -136,23 +184,24 @@ def run_triage_stage(
                 )
             )
         else:
-            batched.extend(
-                sheets_store.build_cell_updates(
-                    row.row_number,
-                    {
-                        "status": sheets_store.STATUS_TRIAGED,
-                        "triage_score": result.score,
-                        "original_triage_score": result.score,
-                        "triage_rationale": result.rationale,
-                        "matched_interest": result.matched_interest or "",
-                        "triage_input_tokens": usage.input_tokens,
-                        "triage_output_tokens": usage.output_tokens,
-                        "triage_cost_usd": round(usage.cost_usd, 6),
-                        "triaged_at": sheets_store.now_iso(),
-                        "last_error": "",
-                    },
-                )
-            )
+            tag, tag_usage = _place(client, settings, taxonomy, row, result.score)
+            if tag_usage is not None:
+                usage = usage + tag_usage  # both calls run on triage.model
+            updates = {
+                "status": sheets_store.STATUS_TRIAGED,
+                "triage_score": result.score,
+                "original_triage_score": result.score,
+                "triage_rationale": result.rationale,
+                "matched_interest": result.matched_interest or "",
+                "triage_input_tokens": usage.input_tokens,
+                "triage_output_tokens": usage.output_tokens,
+                "triage_cost_usd": round(usage.cost_usd, 6),
+                "triaged_at": sheets_store.now_iso(),
+                "last_error": "",
+            }
+            if tag is not None:
+                updates["original_taxonomy"] = updates["taxonomy"] = tag
+            batched.extend(sheets_store.build_cell_updates(row.row_number, updates))
             row.status = sheets_store.STATUS_TRIAGED
             row.triage_score = result.score
             # run_deep_read_stage reads the rationale back off `row.raw`,
@@ -261,6 +310,7 @@ def run_deep_read_stage(
         )
     ]
     logger.info("Deep-reading %d paper(s)", len(to_deep_read))
+    taxonomy = load_taxonomy(settings.taxonomy.file)
 
     for row in to_deep_read:
         candidate = _candidate_from_row(row)
@@ -295,23 +345,27 @@ def run_deep_read_stage(
             )
             continue
 
-        sheets_store.flush_cell_updates(
-            papers_ws,
-            sheets_store.build_cell_updates(
-                row.row_number,
-                {
-                    "status": sheets_store.STATUS_DEEP_READ_COMPLETE,
-                    "triage_score": result.score,
-                    "deep_read_summary": result.summary,
-                    "deep_read_relevance": " | ".join(result.relevance),
-                    "deep_read_limitations": " | ".join(result.limitations),
-                    "deep_read_author_affiliations": " | ".join(result.author_affiliations),
-                    "deep_read_score_rationale": result.score_rationale,
-                    "deep_read_input_tokens": usage.input_tokens,
-                    "deep_read_output_tokens": usage.output_tokens,
-                    "deep_read_cost_usd": round(usage.cost_usd, 6),
-                    "deep_read_at": sheets_store.now_iso(),
-                    "last_error": "",
-                },
-            ),
-        )
+        # Placed again on the deep read's own score, which may have crossed
+        # taxonomy.min_score in either direction. original_taxonomy is left
+        # alone: like original_triage_score, it's the abstract-only call.
+        tag, tag_usage = _place(client, settings, taxonomy, row, result.score, deep_read=result)
+        # Tagging runs on triage.model, which needn't be deep_read.model, so
+        # each call is priced on its own before they're summed.
+        calls = [usage] if tag_usage is None else [usage, tag_usage]
+        updates = {
+            "status": sheets_store.STATUS_DEEP_READ_COMPLETE,
+            "triage_score": result.score,
+            "deep_read_summary": result.summary,
+            "deep_read_relevance": " | ".join(result.relevance),
+            "deep_read_limitations": " | ".join(result.limitations),
+            "deep_read_author_affiliations": " | ".join(result.author_affiliations),
+            "deep_read_score_rationale": result.score_rationale,
+            "deep_read_input_tokens": sum(call.input_tokens for call in calls),
+            "deep_read_output_tokens": sum(call.output_tokens for call in calls),
+            "deep_read_cost_usd": round(sum(call.cost_usd for call in calls), 6),
+            "deep_read_at": sheets_store.now_iso(),
+            "last_error": "",
+        }
+        if tag is not None:
+            updates["taxonomy"] = tag
+        sheets_store.flush_cell_updates(papers_ws, sheets_store.build_cell_updates(row.row_number, updates))

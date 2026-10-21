@@ -37,13 +37,15 @@ reviewed that week and what the week cost.
 1. **Harvest.** Pull every arXiv record added since the last successful run
    and keep the ones whose abstracts match the keyword lists.
 2. **Triage.** Claude scores each abstract from 0 to 10 against the
-   interests text, with a one-line rationale.
+   interests text, with a one-line rationale. Papers scoring 7 or more are
+   also placed in a [research taxonomy](#tag-papers-with-the-research-taxonomy).
 3. **Route.** Papers scoring 7 or more get a deep read. Papers scoring 4 to 6
    get a short summary of the abstract. Everything else is kept with just its
    title and score. Both cutoffs are configurable.
 4. **Deep read.** Download the PDF, extract the text, cut it at the
    References, and have Claude write a structured summary, relevance and
-   limitations, list the authors' institutions, and give its own score.
+   limitations, list the authors' institutions, and give its own score. The
+   paper is then placed in the taxonomy again, with the full read in view.
 5. **Digest.** On Mondays, render the week's papers from the sheet into an
    HTML email. This step is plain templating with no model calls, so the
    email is predictable and free to rebuild.
@@ -137,7 +139,8 @@ of the Opus 5 model it replaced. Triage and deep read now both run on Opus
 
 ## Beyond the daily run
 
-Three manual commands reuse the same pipeline stages.
+Three manual commands reuse the same pipeline stages, and a fourth backfills
+research-taxonomy tags.
 
 ### Backfill a past date range
 
@@ -239,28 +242,73 @@ split across numbered emails, each carrying the full report. Papers pulled in
 this way that the keyword lists would never have matched are flagged
 `manual_only`, so they and their cost stay out of the weekly digest.
 
+### Tag papers with the research taxonomy
+
+[`config/taxonomy.yaml`](config/taxonomy.yaml) defines a hierarchy of research
+categories, from *1 Bias mitigation methods > 1.A Pre-processing > 1.A.i
+Reweighing and resampling* to *3.C Less discriminatory alternatives*. Each
+paper scoring 7 or more is placed in its single most specific category as
+it's triaged, and placed again after a deep read with the deep-read summary
+in view. Papers below 7 are tagged `other` at no cost. Two columns mirror the
+scores: `original_taxonomy` is the abstract-only placement, and `taxonomy` is
+the current one. The sheet stores the category's id. Its number and label
+appear on the paper's card in the digest and deep-dive emails, on the cover
+page of a deep-dive PDF, and on `lit-pick` pages, whose search covers it too.
+
+Tagging is its own small call, so the triage and deep-read prompts are
+unchanged by it. The taxonomy's definitions and rules are cached in the
+prompt: the first call of a run pays two or three cents to cache them, and
+each call after that costs about half a cent. The cost is counted in the
+triage or deep-read cost of the paper. If the call fails, the triage or deep
+read is saved as usual and the paper keeps the tag it had.
+
+`lit-tag` backfills papers triaged before tagging existed and fills in any
+tag a failed call left blank. It is also how to re-tag after editing the
+taxonomy:
+
+```bash
+uv run lit-tag --dry-run
+uv run lit-tag --start-date 2018-01-01 --end-date 2021-12-31
+```
+
+A plain run only touches papers whose tags are missing or no longer fit:
+after an interruption it picks up where it stopped, and after a category is
+renamed or removed it re-tags just the papers that were in it.
+
+| Flag | Effect |
+|---|---|
+| `--start-date`, `--end-date` | Limit to papers published in this window. |
+| `--all` | Re-tag every paper in scope, e.g. after rewriting definitions. |
+| `--limit N` | Send at most N papers to Claude, to check a sample first. |
+| `--dry-run` | Report what would be tagged and a rough cost. Nothing is written. |
+
 ## Cost
 
 At September 2026's volume (66 papers triaged, 27 deep-read), the pipeline
 costs roughly $4 a month on Opus 5.5. That's about $0.01 per triage and about
 $0.11 per deep read, though a deep read's cost varies with the length of the
-paper. Exact per-paper costs are in the sheet.
+paper. Placing papers in the taxonomy adds about $1 a month at that volume.
+Exact per-paper costs are in the sheet.
 
 ## Repository layout
 
 ```
 config/settings.yaml           interests, keywords, thresholds, models
+config/taxonomy.yaml           the research taxonomy papers are tagged into
 src/lit_pipeline/
   daily_pipeline.py            lit-daily: harvest, triage, summarize, deep-read
   weekly_report.py             lit-weekly: build and send the digest
   backfill.py                  lit-backfill
   manual_deep_dive.py          lit-deep-dive
   triage_picker.py             lit-pick: triage a date range, pick papers on an HTML page
+  tagger.py                    lit-tag: tag papers with their taxonomy category
+  taxonomy.py                  loads and validates config/taxonomy.yaml
   pipeline_stages.py           the triage, mid-summary and deep-read stages shared by all of the above
   arxiv_client.py              OAI-PMH harvest, search API, keyword filter, PDF download
   pdf_extract.py               text extraction and References trimming
   llm_triage.py                the Claude calls, one module per step
   llm_mid_summary.py
+  llm_tag.py
   llm_deep_read.py
   schemas.py                   Pydantic schemas for each step's output
   sheets_store.py              the Google Sheet as a database

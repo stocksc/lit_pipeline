@@ -81,6 +81,17 @@ deep_read:
   # 53 pages) while still cutting a 257-page outlier by ~80%.
   max_pdf_pages: 50
 
+taxonomy:
+  # The category tree papers are tagged into: from the abstract at triage,
+  # and again after a deep read. Tagging runs on triage.model, and its cost
+  # is counted in the triage and deep-read costs.
+  file: "config/taxonomy.yaml"
+  # Papers scoring below this are tagged "other" instead of being placed in
+  # the taxonomy (no API call). Matches the deep-read threshold by default.
+  min_score: 7
+  # Claude's effort for the tagging call: low | medium | high.
+  effort: "medium"
+
 google_sheets:
   # The long ID in your Google Sheet's URL:
   # https://docs.google.com/spreadsheets/d/THIS_PART_HERE/edit

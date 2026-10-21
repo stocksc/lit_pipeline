@@ -49,6 +49,8 @@ p.meta { font-size: 9pt; color: #6b7280; }
 p.score { font-size: 12pt; font-weight: bold; margin-top: 10pt; margin-bottom: 2pt; }
 span.was { font-size: 9.5pt; font-weight: normal; color: #6b7280; }
 p.rationale { font-size: 9.5pt; color: #4b5563; font-style: italic; }
+p.category { font-size: 10pt; color: #374151; margin-top: 4pt; }
+span.context { font-size: 9pt; color: #6b7280; }
 p.footer { font-size: 8.5pt; color: #9ca3af; margin-top: 18pt; }
 li { margin-bottom: 3pt; }
 """

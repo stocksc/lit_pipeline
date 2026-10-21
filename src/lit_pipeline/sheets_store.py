@@ -84,6 +84,15 @@ PAPERS_HEADERS = [
     # `triaged` instead of having the next daily run deep-read them unasked.
     # Blank on rows from before this column existed; those count as daily.
     "added_by",
+    # Where the paper sits in the research taxonomy (config/taxonomy.yaml):
+    # a leaf's id path, or "other" below taxonomy.min_score (see taxonomy.py).
+    # Mirrors original_triage_score / triage_score: `original_taxonomy` is
+    # placed from the abstract alone, `taxonomy` is the current tag, which a
+    # deep read can move once the full text has been seen. Written by the
+    # triage and deep-read stages (pipeline_stages.py), and by tagger.py
+    # (lit-tag) for rows triaged before tagging existed.
+    "original_taxonomy",
+    "taxonomy",
 ]
 
 # What gets written into the `manual_only` column. Any non-empty value counts
