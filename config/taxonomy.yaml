@@ -66,7 +66,7 @@ nodes:
             description: Choose features that are predictive but weakly dependent on protected attributes (fair lasso, causal or information-theoretic selection).
       - id: in-processing
         label: In-processing
-        description: Change the objective or algorithm while the model trains.
+        description: Change how the model is trained, through its objective, algorithm or hyperparameters.
         children:
           - id: regularization-and-constraints
             label: Regularization and constraints
@@ -87,9 +87,12 @@ nodes:
           - id: individual-fairness
             label: Individual fairness training
             description: Train so similar individuals are treated similarly, including invariance to sensitive perturbations and learned fair metrics.
-          - id: multi-objective-and-hyperparameter-search
-            label: Multi-objective and hyperparameter search
-            description: Treat accuracy and fairness as joint objectives through Pareto-front methods, fairness-aware hyperparameter optimization, and evolutionary or annealing search over models.
+          - id: multi-objective-optimization
+            label: Multi-objective optimization
+            description: Train with accuracy and fairness as joint objectives and recover Pareto-optimal models, through scalarization (linear or Chebyshev), multi-gradient or bilevel methods, Pareto-efficient fairness notions, and evolutionary or annealing search over the model's own parameters. A search over hyperparameters goes under hyperparameter search, and theory about the shape or cost of the trade-off goes under foundations.
+          - id: hyperparameter-search
+            label: Fairness-aware hyperparameter search
+            description: Leave the learning algorithm as it is and search its hyperparameters or configuration for models that are both fair and accurate, through Bayesian optimization, bandit methods (e.g., Fairband), random or evolutionary search, AutoML and architecture search, including multi-objective (Pareto) searches over hyperparameters. A search framed as finding a less discriminatory alternative to a lending model goes under fair-lending-and-law.
           - id: ensembles-and-group-specific-models
             label: Ensembles and group-specific models
             description: Ensembles (including fairness-aware boosting such as AdaFair), multitask or decoupled group-specific models, blends of group-specific and pooled models, and mixtures of experts.
