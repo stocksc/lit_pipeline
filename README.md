@@ -184,7 +184,8 @@ writes a standalone HTML page to `output/` and opens it in your browser. Each
 paper shows its score, the triage rationale, its authors, and a collapsible
 abstract and deep-read summary, with a checkbox. A panel on the left browses
 the papers by research-taxonomy category, with counts, and the page can
-search, filter by score (click a bar in the score chart), sort, and hide
+search, filter by score (click a bar in the score chart for one score, or
+drag across bars for a range), sort, and hide
 papers that already have a deep read. Papers scoring below 7 are under
 *Other*. The panel's tray keeps a running count of your picks and copies
 them as a list of IDs or as a ready-to-run

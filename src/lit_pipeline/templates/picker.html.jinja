@@ -305,7 +305,8 @@
   .bar-fill { display: block; height: 100%; min-width: 2px; background: var(--bar); border-radius: 0 3px 3px 0; }
   .bar-hit { position: absolute; top: -9px; bottom: -9px; left: 0; right: 0; cursor: default; }
 
-  /* The score chart: one bar per score, click to show that score and up.
+  /* The score chart: one bar per score. Click a bar to show just that score,
+     or drag across bars to show a range.
      Each column is plain block layout with an empty button laid over it to
      take the click. Drawing the bar inside the button instead fails in older
      Chrome (122, for one), which shrinks a button's contents to fit their
@@ -314,7 +315,9 @@
   .scores-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 8px; }
   .scores-title { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
   .scores-hint { font-size: 11.5px; color: var(--muted); }
-  .hist { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 2px; }
+  /* pan-y: a sideways drag picks a range, while an up-and-down one still
+     scrolls the drawer on a touch screen. */
+  .hist { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 2px; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
   .hist-col { position: relative; }
   .hist-count { display: block; height: 12px; line-height: 12px; text-align: center; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
   .hist-track { display: block; position: relative; height: 38px; margin-top: 1px; border-bottom: 1px solid var(--border); }
@@ -322,7 +325,7 @@
   .hist-col.is-off .hist-fill { background: var(--bar-off); }
   .hist-col:hover .hist-fill, .hist-col:focus-within .hist-fill { background: var(--accent); }
   .hist-label { display: block; margin-top: 1px; text-align: center; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-2); }
-  .hist-col.is-floor .hist-label { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+  .hist-col.is-on .hist-label { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
   .hist-hit {
     position: absolute;
     top: 0;
@@ -553,14 +556,11 @@
     <div class="tools">
       <input type="search" class="search" id="search" placeholder="Search titles, authors, abstracts" aria-label="Search titles, authors, categories, abstracts and rationales">
       <div class="scores">
-        <div class="scores-head"><p class="scores-title">Triage scores</p><span class="scores-hint">Click a bar to filter</span></div>
+        <div class="scores-head"><p class="scores-title">Triage scores</p><span class="scores-hint" id="scores-hint"></span></div>
         <div class="hist" id="score-chart" role="group" aria-label="Papers by triage score"></div>
       </div>
       <div class="selects">
-        <select id="min-score" aria-label="Minimum score">
-          <option value="0">Any score</option>
-          {% for score in range(1, 11) %}<option value="{{ score }}">Scored {{ score }}+</option>{% endfor %}
-        </select>
+        <select id="score-range" aria-label="Scores shown"></select>
         <select id="sort" aria-label="Sort">
           <option value="score">Highest score first</option>
           <option value="newest">Newest first</option>
@@ -651,7 +651,8 @@
   const tree = $("tree");
   const card = $("card");
   const search = $("search");
-  const minScore = $("min-score");
+  const chart = $("score-chart");
+  const scoreSelect = $("score-range");
   const sortSelect = $("sort");
   const hideDeepRead = $("hide-deep-read");
   const pickedOnly = $("picked-only");
@@ -746,17 +747,21 @@
   const picks = loadPicks();
 
   // --- filtering and counting
-  const minValue = () => Number(minScore.value) || 0;
-  function passes(paper, ignoreMin) {
+  // The scores shown, lowest to highest inclusive. A single score is lo === hi.
+  const SCORE_MAX = 10;
+  let scoreLo = 0;
+  let scoreHi = SCORE_MAX;
+  const scoreFiltered = () => scoreLo > 0 || scoreHi < SCORE_MAX;
+  function passes(paper, ignoreScore) {
     return (
-      (ignoreMin || paper.triage_score >= minValue()) &&
+      (ignoreScore || (paper.triage_score >= scoreLo && paper.triage_score <= scoreHi)) &&
       (year === "all" || paper.year === year) &&
       !(hideDeepRead.checked && paper.deep_read_summary) &&
       !(pickedOnly.checked && !picks.has(paper.arxiv_id)) &&
       terms.every((term) => paper.haystack.includes(term))
     );
   }
-  const filtering = () => terms.length > 0 || minValue() > 0 || year !== "all" || hideDeepRead.checked || pickedOnly.checked;
+  const filtering = () => terms.length > 0 || scoreFiltered() || year !== "all" || hideDeepRead.checked || pickedOnly.checked;
 
   // Every count on the page comes from here: for each node, the papers under
   // it that pass the filters, and the ones picked whatever the filters say.
@@ -916,27 +921,155 @@
     );
   }
 
+  // --- the score filter: the chart and the dropdown both show and set it
+  function rangeLabel(lo, hi) {
+    if (lo === 0 && hi === SCORE_MAX) return "Any score";
+    if (lo === hi) return `Scored ${lo}`;
+    if (hi === SCORE_MAX) return `Scored ${lo}+`;
+    if (lo === 0) return `Scored ${hi} or less`;
+    return `Scored ${lo}–${hi}`;
+  }
+  const rangeValue = (lo, hi) => `${lo}-${hi}`;
+
+  // Every range the dropdown offers maps to exactly one option. A range
+  // dragged on the chart that none of them covers gets an option of its own
+  // (see syncScoreSelect).
+  function buildScoreSelect() {
+    const option = (lo, hi) => `<option value="${rangeValue(lo, hi)}">${rangeLabel(lo, hi)}</option>`;
+    const group = (label, ranges) => `<optgroup label="${label}">${ranges.map(([lo, hi]) => option(lo, hi)).join("")}</optgroup>`;
+    const scores = Array.from({ length: SCORE_MAX + 1 }, (_, score) => score);
+    const between = scores.slice(1, -1);
+    scoreSelect.innerHTML =
+      option(0, SCORE_MAX) +
+      group("At least", between.map((s) => [s, SCORE_MAX])) +
+      group("At most", between.map((s) => [0, s])) +
+      group("Exactly", scores.map((s) => [s, s]));
+  }
+
+  function syncScoreSelect() {
+    const value = rangeValue(scoreLo, scoreHi);
+    let custom = scoreSelect.querySelector("optgroup[data-custom]");
+    const preset = Array.from(scoreSelect.options).some((o) => o.value === value && o.parentElement !== custom);
+    if (preset) {
+      if (custom) custom.remove();
+    } else {
+      if (!custom) {
+        custom = document.createElement("optgroup");
+        custom.label = "Range";
+        custom.dataset.custom = "";
+        custom.appendChild(document.createElement("option"));
+        scoreSelect.firstElementChild.after(custom);
+      }
+      custom.firstElementChild.value = value;
+      custom.firstElementChild.textContent = rangeLabel(scoreLo, scoreHi);
+    }
+    scoreSelect.value = value;
+  }
+
+  function setScoreRange(lo, hi) {
+    scoreLo = Math.min(lo, hi);
+    scoreHi = Math.max(lo, hi);
+    render();
+  }
+
+  // Clicking the score that's already the only one shown goes back to every score.
+  function clickScore(score) {
+    if (scoreLo === score && scoreHi === score) setScoreRange(0, SCORE_MAX);
+    else setScoreRange(score, score);
+    chart.querySelector(`.hist-hit[data-score="${score}"]`)?.focus();
+  }
+
+  // Shades the bars outside lo..hi, for the filter in force or a drag in progress.
+  function markScoreRange(lo, hi, on) {
+    chart.querySelectorAll(".hist-col").forEach((col, score) => {
+      const inside = score >= lo && score <= hi;
+      col.classList.toggle("is-off", on && !inside);
+      col.classList.toggle("is-on", on && inside);
+    });
+  }
+
   // The score chart sits in the drawer, so it's there whichever category is
   // open. It counts every paper the other filters let through, in every
   // category, the way the score filter it sets applies to all of them.
+  let chartCounts = [];
   function renderChart() {
-    const counts = Array.from({ length: 11 }, () => 0);
-    for (const paper of papers) if (passes(paper, true)) counts[Math.min(10, Math.max(0, paper.triage_score))] += 1;
+    const counts = Array.from({ length: SCORE_MAX + 1 }, () => 0);
+    for (const paper of papers) if (passes(paper, true)) counts[Math.min(SCORE_MAX, Math.max(0, paper.triage_score))] += 1;
+    chartCounts = counts;
     const max = Math.max(1, ...counts);
-    const floor = minValue();
-    $("score-chart").innerHTML = counts.map((n, score) => {
-      const label = `${plural(n, "paper")} scored ${score}. ${floor === score && score ? "Click again to show every score." : `Click to show ${score} and up.`}`;
+    const only = scoreLo === scoreHi ? scoreLo : -1;
+    chart.innerHTML = counts.map((n, score) => {
+      const label = `${plural(n, "paper")} scored ${score}. ` +
+        (score === only ? "Click again to show every score." : `Click to show only ${score}, or drag across bars for a range.`);
       const height = n ? Math.max(5, Math.round((n / max) * 100)) : 0;
-      const isFloor = floor > 0 && score === floor;
-      const classes = ["hist-col", score < floor && "is-off", isFloor && "is-floor"].filter(Boolean).join(" ");
+      const pressed = scoreFiltered() && score >= scoreLo && score <= scoreHi;
       return (
-        `<div class="${classes}"><span class="hist-count">${n ? n.toLocaleString() : ""}</span>` +
+        `<div class="hist-col"><span class="hist-count">${n ? n.toLocaleString() : ""}</span>` +
         `<span class="hist-track"><span class="hist-fill" style="height:${height}%"></span></span>` +
         `<span class="hist-label">${score}</span>` +
-        `<button type="button" class="hist-hit" data-score="${score}" data-tip="${label}" aria-label="${label}" aria-pressed="${isFloor}"></button></div>`
+        `<button type="button" class="hist-hit" data-score="${score}" data-tip="${label}" aria-label="${label}" aria-pressed="${pressed}"></button></div>`
       );
     }).join("");
+    markScoreRange(scoreLo, scoreHi, scoreFiltered());
+    $("scores-hint").innerHTML = scoreFiltered()
+      ? '<button type="button" class="link-btn" data-action="all-scores">Show all scores</button>'
+      : "Click a score, or drag for a range";
+    syncScoreSelect();
   }
+
+  // A press on a bar starts a range at that score; dragging stretches it and
+  // letting go applies it. Letting go on the same bar is a click. The chart
+  // holds the pointer for the whole gesture, so the range follows it even
+  // past either end of the chart.
+  let drag = null;
+  function scoreAt(clientX) {
+    const box = chart.getBoundingClientRect();
+    const score = Math.floor(((clientX - box.left) / box.width) * (SCORE_MAX + 1));
+    return Math.min(SCORE_MAX, Math.max(0, score));
+  }
+  function showDragTip(lo, hi) {
+    let n = 0;
+    for (let score = lo; score <= hi; score += 1) n += chartCounts[score] || 0;
+    tip.textContent = `${rangeLabel(lo, hi)}: ${plural(n, "paper")}`;
+    tip.hidden = false;
+  }
+  chart.addEventListener("pointerdown", (event) => {
+    const hit = event.target.closest(".hist-hit");
+    if (!hit || event.button !== 0) return;
+    const score = Number(hit.dataset.score);
+    drag = { anchor: score, current: score };
+    try {
+      chart.setPointerCapture(event.pointerId);
+    } catch (e) {
+      // Without capture the drag still works while the pointer stays over the chart.
+    }
+    markScoreRange(score, score, true);
+    showDragTip(score, score);
+  });
+  // Redrawn on every move, not just when the range changes: the page's
+  // tooltip handlers hide or retitle the tip as the pointer crosses bars.
+  chart.addEventListener("pointermove", (event) => {
+    if (!drag) return;
+    drag.current = scoreAt(event.clientX);
+    const lo = Math.min(drag.anchor, drag.current);
+    const hi = Math.max(drag.anchor, drag.current);
+    markScoreRange(lo, hi, true);
+    showDragTip(lo, hi);
+  });
+  chart.addEventListener("pointerup", () => {
+    if (!drag) return;
+    const { anchor, current } = drag;
+    drag = null;
+    tip.hidden = true;
+    if (anchor === current) clickScore(anchor);
+    else setScoreRange(anchor, current);
+  });
+  chart.addEventListener("pointercancel", () => {
+    if (!drag) return;
+    drag = null;
+    tip.hidden = true;
+    markScoreRange(scoreLo, scoreHi, scoreFiltered());
+  });
 
   function renderOverview() {
     if (!papers.length) {
@@ -1080,7 +1213,8 @@
   function resetFilters() {
     search.value = "";
     terms = [];
-    minScore.value = "0";
+    scoreLo = 0;
+    scoreHi = SCORE_MAX;
     year = "all";
     hideDeepRead.checked = false;
     pickedOnly.checked = false;
@@ -1157,17 +1291,16 @@
     }
     const bar = target.closest(".hist-hit");
     if (bar) {
-      const score = Number(bar.dataset.score);
-      // Clicking the bar that's already the floor clears it.
-      minScore.value = String(score === minValue() ? 0 : score);
-      render();
-      $("score-chart").querySelector(`.hist-hit[data-score="${score}"]`)?.focus();
+      // Mouse, touch and pen go through the chart's pointer handlers above.
+      // A click from Enter or Space (detail 0) is the keyboard's way in.
+      if (event.detail === 0) clickScore(Number(bar.dataset.score));
       return;
     }
     const action = target.closest("[data-action]");
     if (action) {
       if (action.dataset.action === "pick-shown") pickShown();
       else if (action.dataset.action === "reset-filters") resetFilters();
+      else if (action.dataset.action === "all-scores") setScoreRange(0, SCORE_MAX);
       return;
     }
     const moreAuthors = target.closest(".more-authors");
@@ -1201,7 +1334,12 @@
       select("", true);
     }, 120);
   });
-  for (const control of [minScore, sortSelect, hideDeepRead, pickedOnly]) {
+  buildScoreSelect();
+  scoreSelect.addEventListener("change", () => {
+    const [lo, hi] = scoreSelect.value.split("-").map(Number);
+    setScoreRange(lo, hi);
+  });
+  for (const control of [sortSelect, hideDeepRead, pickedOnly]) {
     control.addEventListener("change", render);
   }
 
