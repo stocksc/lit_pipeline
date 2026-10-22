@@ -87,8 +87,9 @@ taxonomy:
   # is counted in the triage and deep-read costs.
   file: "config/taxonomy.yaml"
   # Papers scoring below this are tagged "other" instead of being placed in
-  # the taxonomy (no API call). Matches the deep-read threshold by default.
-  min_score: 7
+  # the taxonomy (no API call). One below the deep-read threshold, so the
+  # near misses can be browsed by category in lit-pick too.
+  min_score: 6
   # Claude's effort for the tagging call: low | medium | high.
   effort: "medium"
 
