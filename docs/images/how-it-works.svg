@@ -63,7 +63,7 @@
 
   <rect class="claude" x="260" y="242" width="360" height="60" rx="10"/>
   <text class="t" x="440" y="267" text-anchor="middle">Triage</text>
-  <text class="s" x="440" y="287" text-anchor="middle">Claude scores the abstract 0–10  ·  ~1¢</text>
+  <text class="s" x="440" y="287" text-anchor="middle">Claude scores the abstract 0–10  ·  under 1¢</text>
 
   <path class="wire" d="M440 302 V330 H170 V368" marker-end="url(#arrow)"/>
   <path class="wire" d="M440 302 V368" marker-end="url(#arrow)"/>
@@ -78,12 +78,12 @@
   <rect class="claude" x="40" y="370" width="260" height="78" rx="10"/>
   <text class="t" x="170" y="396" text-anchor="middle">Deep read</text>
   <text class="s" x="170" y="416" text-anchor="middle">Claude reads the full paper</text>
-  <text class="s" x="170" y="434" text-anchor="middle">and re-scores it  ·  ~11¢</text>
+  <text class="s" x="170" y="434" text-anchor="middle">and re-scores it  ·  ~8¢</text>
 
   <rect class="claude" x="320" y="370" width="240" height="78" rx="10"/>
   <text class="t" x="440" y="396" text-anchor="middle">Mid summary</text>
   <text class="s" x="440" y="416" text-anchor="middle">~50 words from the abstract</text>
-  <text class="s" x="440" y="434" text-anchor="middle">no PDF download  ·  ~1¢</text>
+  <text class="s" x="440" y="434" text-anchor="middle">no PDF download  ·  under 1¢</text>
 
   <rect class="ghost" x="580" y="370" width="260" height="78" rx="10"/>
   <text class="t" x="710" y="403" text-anchor="middle">Title and score only</text>

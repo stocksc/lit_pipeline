@@ -10,8 +10,8 @@ arrive as one email.
 
 It was built to follow fair lending and algorithmic fairness research, a
 niche no off-the-shelf alert covers well. It runs unattended on GitHub
-Actions, keeps all of its state in a single Google Sheet, and costs about $1
-a week in API calls. Pointing it at a different field means rewriting one
+Actions, keeps all of its state in a single Google Sheet, and costs under $1
+a month in API calls. Pointing it at a different field means rewriting one
 paragraph and a keyword list.
 
 ## What arrives every Monday
@@ -37,7 +37,7 @@ reviewed that week and what the week cost.
 1. **Harvest.** Pull every arXiv record added since the last successful run
    and keep the ones whose abstracts match the keyword lists.
 2. **Triage.** Claude scores each abstract from 0 to 10 against the
-   interests text, with a one-line rationale. Papers scoring 7 or more are
+   interests text, with a one-line rationale. Papers scoring 6 or more are
    also placed in a [research taxonomy](#tag-papers-with-the-research-taxonomy).
 3. **Route.** Papers scoring 7 or more get a deep read. Papers scoring 4 to 6
    get a short summary of the abstract. Everything else is kept with just its
@@ -54,7 +54,7 @@ reviewed that week and what the week cost.
 
 ### Read the abstract first, and the paper only when it earns it
 
-Scoring an abstract costs about a cent. A deep read costs about ten times as
+Scoring an abstract costs under a cent. A deep read costs about ten times as
 much, since it sends the whole paper. So the full read is reserved for papers
 that clear the triage bar.
 
@@ -107,8 +107,9 @@ about 59K input tokens per paper. For a summary of what a paper does, the
 extracted text is enough. The bibliography adds tokens without adding
 anything to a summary, so the text is cut at the References heading, which
 also drops any appendix after it. A 50-page cap catches the rare document
-where that heading can't be trusted. When a 257-page thesis matched the
-keywords, this brought its deep read from about $2.00 to about $0.25.
+where that heading can't be trusted. When a thesis-length document matched
+the keywords, this cut its input from about 400,000 tokens to about 44,000,
+which at Opus 5.5 prices takes its deep read from about $1.60 to under $0.20.
 
 ### Get structured output, validated on arrival
 
@@ -186,7 +187,7 @@ abstract and deep-read summary, with a checkbox. A panel on the left browses
 the papers by research-taxonomy category, with counts, and the page can
 search, filter by score (click a bar in the score chart for one score, or
 drag across bars for a range), sort, and hide
-papers that already have a deep read. Papers scoring below 7 are under
+papers that already have a deep read. Papers scoring below 6 are under
 *Other*. The panel's tray keeps a running count of your picks and copies
 them as a list of IDs or as a ready-to-run
 `lit-deep-dive` command, or downloads them as a `.txt` file. Picks survive
@@ -251,19 +252,21 @@ this way that the keyword lists would never have matched are flagged
 [`config/taxonomy.yaml`](config/taxonomy.yaml) defines a hierarchy of research
 categories, from *1 Bias mitigation methods > 1.A Pre-processing > 1.A.i
 Reweighing and resampling* to *3.C Less discriminatory alternatives*. Each
-paper scoring 7 or more is placed in its single most specific category as
+paper scoring 6 or more is placed in its single most specific category as
 it's triaged, and placed again after a deep read with the deep-read summary
-in view. Papers below 7 are tagged `other` at no cost. Two columns mirror the
-scores: `original_taxonomy` is the abstract-only placement, and `taxonomy` is
-the current one. The sheet stores the category's id. Its number and label
-appear on the paper's card in the digest and deep-dive emails, on the cover
-page of a deep-dive PDF, and on `lit-pick` pages, whose search covers it too.
+in view. Papers below 6 (`taxonomy.min_score`) are tagged `other` at no
+cost. Two columns mirror the scores: `original_taxonomy` is the abstract-only
+placement, and `taxonomy` is the current one. The sheet stores the category's
+id. Its number and label appear on the paper's card in the digest and
+deep-dive emails, on the cover page of a deep-dive PDF, and on `lit-pick`
+pages, whose search covers it too.
 
 Tagging is its own small call, so the triage and deep-read prompts are
 unchanged by it. The taxonomy's definitions and rules are cached in the
-prompt: the first call of a run pays two or three cents to cache them, and
-each call after that costs about half a cent. The cost is counted in the
-triage or deep-read cost of the paper. If the call fails, the triage or deep
+prompt: the first call of a run pays four or five cents to cache them, and
+each call after that costs about half a cent. When tagging runs as part of
+triage or a deep read, its cost is added to that stage's cost in the sheet;
+`lit-tag` prints its own total instead. If the call fails, the triage or deep
 read is saved as usual and the paper keeps the tag it had.
 
 `lit-tag` backfills papers triaged before tagging existed and fills in any
@@ -288,11 +291,22 @@ renamed or removed it re-tags just the papers that were in it.
 
 ## Cost
 
-At September 2026's volume (66 papers triaged, 27 deep-read), the pipeline
-costs roughly $4 a month on Opus 5.5. That's about $0.01 per triage and about
-$0.11 per deep read, though a deep read's cost varies with the length of the
-paper. Placing papers in the taxonomy adds about $1 a month at that volume.
-Exact per-paper costs are in the sheet.
+Measured from the sheet's cost columns since every step moved to Opus 5.5 on
+October 9, 2026:
+
+| Step | Cost per paper |
+|---|---|
+| Triage (every paper) | 0.86¢ median |
+| Short summary (scores 4–6) | about the same as triage |
+| Taxonomy placement (scores 6 and up) | about 0.5¢, plus 4–5¢ once per run to cache the outline |
+| Deep read (scores 7 and up) | 8.6¢ median, 4–13¢ depending on the paper's length |
+| Weekly digest | nothing: no model calls |
+
+In its first 13 days on Opus 5.5 the daily job triaged 24 papers, deep-read
+one and spent $0.38, which is under $1 a month at that pace. Backfills cost
+about $1 per 100 papers: `lit-pick` triaged the 2,362 papers published in
+2018–2024 for $22.52. Exact per-paper costs are in the sheet, except for
+`lit-tag` runs, which print their total when they finish.
 
 ## Repository layout
 
